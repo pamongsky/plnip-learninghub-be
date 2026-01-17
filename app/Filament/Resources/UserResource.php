@@ -48,6 +48,7 @@ class UserResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+        ->modifyQueryUsing(fn ($query) => $query->with('roles'))
             ->columns([
                 Tables\Columns\TextColumn::make('id')
                     ->label('ID'),
