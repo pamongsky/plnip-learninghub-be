@@ -8,9 +8,7 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        $this->call([
-            RoleSeeder::class,
-            UserSeeder::class,
-        ]);
+        // All data is managed directly via Oracle database
+        // No seeders needed
     }
 }

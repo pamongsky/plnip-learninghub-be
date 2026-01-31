@@ -10,13 +10,14 @@ class AnnouncementController extends Controller
 {
     public function index(Request $request)
     {
-        $perPage = $request->input('per_page', 10);
+        $perPage = $request->input('per_page', 15);
         $priority = $request->input('priority');
+        $search = $request->input('search');
 
         $query = Announcement::where('is_active', true)
             ->where(function ($q) {
                 $q->whereNull('published_at')
-                  ->orWhere('published_at', '<=', now());
+                    ->orWhere('published_at', '<=', now());
             })
             ->with('creator:id,name,department,position');
 
@@ -24,7 +25,15 @@ class AnnouncementController extends Controller
             $query->where('priority', $priority);
         }
 
-        $announcements = $query->orderBy('priority', 'desc')
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('content', 'like', "%{$search}%");
+            });
+        }
+
+        // Fix: Custom sort agar High muncul paling atas (High=1, Medium=2, Low=3)
+        $announcements = $query->orderByRaw("CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END ASC")
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
 
@@ -63,10 +72,10 @@ class AnnouncementController extends Controller
         $announcements = Announcement::where('is_active', true)
             ->where(function ($q) {
                 $q->whereNull('published_at')
-                  ->orWhere('published_at', '<=', now());
+                    ->orWhere('published_at', '<=', now());
             })
             ->with('creator:id,name,department,position')
-            ->orderBy('priority', 'desc')
+            ->orderByRaw("CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END ASC")
             ->orderBy('published_at', 'desc')
             ->limit($limit)
             ->get();

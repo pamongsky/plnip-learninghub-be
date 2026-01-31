@@ -1,16 +1,13 @@
 <?php
 
 namespace App\Models;
-
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable
 {
     use HasFactory, Notifiable, HasRoles, HasApiTokens;
 
@@ -32,6 +29,8 @@ class User extends Authenticatable implements FilamentUser
         'remember_token',
     ];
 
+    protected $appends = ['role'];
+
     protected function casts(): array
     {
         return [
@@ -41,14 +40,27 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
-    public function canAccessPanel(Panel $panel): bool
+    /**
+     * Get the user's primary role name
+     * This accessor provides compatibility with code that expects $user->role
+     */
+    public function getRoleAttribute(): ?string
     {
-        return $this->hasAnyRole(['super-admin', 'admin']);
-    
+        return $this->roles->first()?->name;
     }
 
-    public function getFilamentAvatarUrl(): ?string
+    /**
+     * Get the courses enrolled by the user
+     */
+    public function enrollments()
     {
-        return null; 
+        return $this->hasMany(CourseEnrollment::class);
+    }
+
+    public function courses()
+    {
+        return $this->belongsToMany(Course::class, 'course_enrollments')
+            ->withPivot('status', 'enrolled_at', 'moodle_role_id')
+            ->withTimestamps();
     }
 }

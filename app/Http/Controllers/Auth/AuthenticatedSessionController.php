@@ -31,24 +31,6 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        // Ambil email yang sedang login biar kodingan lebih rapi
-        $email = $request->user()->email;
-
-        // --- SKENARIO 1 & 2: SUPER ADMIN & ADMIN (Masuk ke Filament) ---
-        // Sesuai jadwal, Admin biasa juga masuk panel yang sama, bedanya nanti di "Policy" (hak akses menu)
-        if ($email === 'superadmin@plnip.local' || $email === 'admin@plnip.local') {
-            return redirect()->intended('/admin'); 
-        }
-
-        // --- SKENARIO 3: INSTRUCTOR (Masuk Dashboard Khusus) ---
-        // PENTING: Route '/instructor/dashboard' belum kita buat (masuk tugas Siang nanti).
-        // Jadi kalau kamu login pakai email ini sekarang, bakal 404 Not Found. Itu wajar.
-        if ($email === 'instructor@plnip.local') {
-            return redirect()->intended('/instructor/dashboard');
-        }
-
-        // --- SKENARIO 4: EMPLOYEE / KARYAWAN (Default) ---
-        // Sisanya (termasuk employee@plnip.local) masuk ke dashboard belajar biasa
         return redirect()->intended(route('dashboard', absolute: false));
     }
     /**

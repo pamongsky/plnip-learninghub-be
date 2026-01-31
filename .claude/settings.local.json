@@ -3,7 +3,8 @@
     "allow": [
       "Bash(find:*)",
       "Bash(grep:*)",
-      "Bash(php -r:*)"
+      "Bash(php -r:*)",
+      "Bash(npx next lint .)"
     ]
   }
 }
