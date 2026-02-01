@@ -3,6 +3,7 @@
 ## 🚀 Getting Started in 5 Minutes
 
 ### Step 1: Configure Environment (1 min)
+
 Edit your `.env` file:
 
 ```bash
@@ -18,7 +19,9 @@ ERP_SYNC_SCHEDULE=02:00
 ```
 
 ### Step 2: Create Users Manually (Dev Phase)
+
 In super admin panel:
+
 1. Go to "Kelola Semua User"
 2. Click "Tambah User"
 3. Fill form: name, email, employee_id, role, etc.
@@ -26,27 +29,33 @@ In super admin panel:
 5. Manual users are **never** overwritten by ERP
 
 ### Step 3: Enable ERP When Ready (Production)
+
 ```bash
 ERP_ENABLED=true
 ```
 
 Now:
+
 - Daily sync runs automatically at 2:00 AM
 - ERP users are created/updated
 - Manual users from dev phase stay intact
 - All changes logged in audit trail
 
 ### Step 4: Trigger Manual Sync Anytime
+
 In super admin panel → "Sync ERP" button
 
 Or via API:
+
 ```bash
 curl -X POST http://localhost:8000/api/superadmin/sync-erp \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Step 5: Monitor Results
+
 Check logs:
+
 ```bash
 # Recent sync operations
 tail -f storage/logs/audit.log | grep "ERP sync"
@@ -73,6 +82,7 @@ tail -f storage/logs/security.log | grep "ERP"
 ## 🔍 Testing the Integration
 
 ### Quick Test via Command Line
+
 ```bash
 # Test if everything is configured
 php artisan tinker
@@ -85,6 +95,7 @@ exit
 ```
 
 ### Run Sync with Verbose Output
+
 ```bash
 php artisan erp:sync -v
 
@@ -98,6 +109,7 @@ php artisan erp:sync -v
 ```
 
 ### Check Database
+
 ```bash
 php artisan tinker
 
@@ -120,12 +132,14 @@ exit
 ## ⚠️ Common Issues & Fixes
 
 ### "ERP API error: 401"
+
 ```bash
 # Wrong or expired API key
 # Solution: Get new key from PLN IT and update ERP_API_KEY in .env
 ```
 
 ### "Connection timeout"
+
 ```bash
 # ERP server is down or unreachable
 # Solution: Check VPN connection, firewall rules
@@ -133,6 +147,7 @@ exit
 ```
 
 ### "No employees data from ERP"
+
 ```bash
 # ERP API returned empty response
 # Check: curl -H "Authorization: Bearer KEY" https://your-erp-url
@@ -140,6 +155,7 @@ exit
 ```
 
 ### Users not created after sync
+
 ```bash
 # Check if ERP is enabled
 echo $ERP_ENABLED  # Should output: true
@@ -152,6 +168,7 @@ php artisan erp:sync -v  # Shows detail
 ```
 
 ### Scheduled sync not running
+
 ```bash
 # Check if scheduler is active
 ps aux | grep schedule:run
@@ -191,11 +208,13 @@ Authorization: Bearer YOUR_API_KEY
 ```
 
 **Required fields:**
+
 - `employee_id` (string, unique)
 - `name` (string)
 - `email` (string)
 
 **Optional fields:**
+
 - `phone`, `department`, `position`
 - `access_group` (maps to role)
 - `is_active` (boolean)
@@ -206,12 +225,12 @@ Authorization: Bearer YOUR_API_KEY
 
 Your `access_group` field must be one of:
 
-| ERP Value | Portal Role | Permissions |
-|---|---|---|
-| `SUPERADMIN` | super-admin | Full access |
-| `ADMIN_UNIT` | admin | Department management |
-| `INSTRUCTOR` | instructor | Class management |
-| `USER` | user | Learning only |
+| ERP Value    | Portal Role | Permissions           |
+| ------------ | ----------- | --------------------- |
+| `SUPERADMIN` | super-admin | Full access           |
+| `ADMIN_UNIT` | admin       | Department management |
+| `INSTRUCTOR` | instructor  | Class management      |
+| `USER`       | user        | Learning only         |
 
 **Example:** If ERP sends `access_group: "INSTRUCTOR"`, user gets `instructor` role automatically.
 
@@ -230,22 +249,23 @@ Your `access_group` field must be one of:
 ## 📞 Getting Help
 
 1. **Check logs first:**
-   ```bash
-   tail -f storage/logs/security.log
-   tail -f storage/logs/audit.log
-   ```
+
+    ```bash
+    tail -f storage/logs/security.log
+    tail -f storage/logs/audit.log
+    ```
 
 2. **Read full guide:**
-   - See `ERP_INTEGRATION_GUIDE.md` in project root
+    - See `ERP_INTEGRATION_GUIDE.md` in project root
 
 3. **Implementation details:**
-   - See `ERP_SYNC_IMPLEMENTATION.md` in project root
+    - See `ERP_SYNC_IMPLEMENTATION.md` in project root
 
 4. **Ask PLN IT team:**
-   - ERP API credentials
-   - ERP API endpoint
-   - Required access_group values
-   - Employee data structure
+    - ERP API credentials
+    - ERP API endpoint
+    - Required access_group values
+    - Employee data structure
 
 ---
 
@@ -274,6 +294,7 @@ php artisan tinker
 ## ✅ You're Ready!
 
 If you can:
+
 1. ✅ See ERP users in database
 2. ✅ See "Sync ERP" button in UI
 3. ✅ Check audit logs for operations

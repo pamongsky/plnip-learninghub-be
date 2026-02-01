@@ -17,18 +17,21 @@ PLN IP Learning Hub now supports automated user synchronization from the Enterpr
 ### Sync Strategies
 
 #### 1. Scheduled Sync (PRIMARY)
+
 - Configured time daily (default: 2:00 AM)
 - Automated via Laravel scheduler
 - Configurable in `ERP_SYNC_SCHEDULE`
 - **Best for**: Predictable user data updates
 
 #### 2. Just-In-Time (JIT) Validation
+
 - Real-time status check at login
 - Validates user is still active in ERP
 - Requires `ERP_JIT_VALIDATION=true`
 - **Best for**: Security, deactivating users immediately
 
 #### 3. Webhook (Future)
+
 - ERP pushes updates to portal
 - Real-time sync on user changes
 - Requires `ERP_WEBHOOK_ENABLED=true` and webhook token
@@ -37,6 +40,7 @@ PLN IP Learning Hub now supports automated user synchronization from the Enterpr
 ### User Identification
 
 **Employee ID** is the primary key for all ERP sync operations:
+
 - Permanent and never changes
 - Unique across organization
 - Cannot be duplicated
@@ -62,12 +66,12 @@ AuditLog (track all changes)
 
 Access groups in ERP map to portal roles:
 
-| ERP access_group | Portal Role | Permission Level |
-|---|---|---|
-| `SUPERADMIN` | `super-admin` | Full system access |
-| `ADMIN_UNIT` | `admin` | Department admin |
-| `INSTRUCTOR` | `instructor` | Class management |
-| `USER` | `user` | Learning access only |
+| ERP access_group | Portal Role   | Permission Level     |
+| ---------------- | ------------- | -------------------- |
+| `SUPERADMIN`     | `super-admin` | Full system access   |
+| `ADMIN_UNIT`     | `admin`       | Department admin     |
+| `INSTRUCTOR`     | `instructor`  | Class management     |
+| `USER`           | `user`        | Learning access only |
 
 ## Configuration
 
@@ -118,27 +122,29 @@ Your ERP API should return employees in this format:
 
 ```json
 {
-  "employees": [
-    {
-      "employee_id": "EMP001234",
-      "email": "john.doe@plnip.co.id",
-      "name": "John Doe",
-      "phone": "082112345678",
-      "department": "Transmisi",
-      "position": "Senior Engineer",
-      "access_group": "ADMIN_UNIT",
-      "is_active": true
-    }
-  ]
+    "employees": [
+        {
+            "employee_id": "EMP001234",
+            "email": "john.doe@plnip.co.id",
+            "name": "John Doe",
+            "phone": "082112345678",
+            "department": "Transmisi",
+            "position": "Senior Engineer",
+            "access_group": "ADMIN_UNIT",
+            "is_active": true
+        }
+    ]
 }
 ```
 
 ### Required Fields
+
 - `employee_id` (string) - Unique identifier
 - `email` (string) - User email address
 - `name` (string) - Full name
 
 ### Optional Fields
+
 - `phone` (string) - Phone number
 - `department` (string) - Department name
 - `position` (string) - Job position
@@ -146,6 +152,7 @@ Your ERP API should return employees in this format:
 - `is_active` (boolean) - Active status
 
 ### API Requirements
+
 - **Method**: GET
 - **Authentication**: Bearer token in `Authorization` header
 - **Response**: JSON with `employees` array
@@ -158,6 +165,7 @@ Your ERP API should return employees in this format:
 Once `ERP_ENABLED=true`, the sync runs automatically daily at configured time.
 
 **Monitor logs:**
+
 ```bash
 # View audit logs
 tail -f storage/logs/audit.log
@@ -173,16 +181,17 @@ tail -f storage/logs/security.log
 **Headers:** `Authorization: Bearer {sanctum_token}`
 
 **Response:**
+
 ```json
 {
-  "message": "ERP sync completed successfully",
-  "stats": {
-    "created": 15,
-    "updated": 8,
-    "skipped": 2,
-    "errors": 0
-  },
-  "timestamp": "2024-01-15T10:30:45Z"
+    "message": "ERP sync completed successfully",
+    "stats": {
+        "created": 15,
+        "updated": 8,
+        "skipped": 2,
+        "errors": 0
+    },
+    "timestamp": "2024-01-15T10:30:45Z"
 }
 ```
 
@@ -202,6 +211,7 @@ php artisan erp:sync -v
 ```
 
 **Output:**
+
 ```
 🔄 Starting ERP user sync...
 
@@ -220,12 +230,13 @@ php artisan erp:sync -v
 
 All users have a `source` field to track their origin:
 
-| Source | Description | Editable | Sync |
-|--------|-------------|----------|------|
-| `manual` | Created in dev phase | ✅ Yes | ❌ Never |
-| `erp` | Created from ERP sync | ❌ No | ✅ Auto-sync |
+| Source   | Description           | Editable | Sync         |
+| -------- | --------------------- | -------- | ------------ |
+| `manual` | Created in dev phase  | ✅ Yes   | ❌ Never     |
+| `erp`    | Created from ERP sync | ❌ No    | ✅ Auto-sync |
 
 **Dev to Production Transition:**
+
 - Dev phase: Create users manually (`source=manual`)
 - Production: Enable ERP sync (`ERP_ENABLED=true`)
 - Manual users persist, not overwritten by ERP sync
@@ -236,6 +247,7 @@ All users have a `source` field to track their origin:
 ### Automatic Role Assignment
 
 When user syncs from ERP:
+
 1. Read `access_group` from ERP data
 2. Map to portal role (see Role Mapping table)
 3. Assign role automatically
@@ -245,6 +257,7 @@ When user syncs from ERP:
 Super-admin can override any user's role:
 
 **Via API:**
+
 ```
 POST /api/superadmin/users/{user}/override-role
 {
@@ -254,6 +267,7 @@ POST /api/superadmin/users/{user}/override-role
 ```
 
 **Effect:**
+
 - User's original role is stored in `role_override` field
 - Role override persists even if ERP data changes
 - Change is logged in audit trail with reason
@@ -276,14 +290,15 @@ AuditLog::create([
 ```
 
 **View audit logs:**
+
 ```bash
 # Recent sync operations
-SELECT * FROM audit_logs 
-WHERE action = 'erp_sync_manual' 
+SELECT * FROM audit_logs
+WHERE action = 'erp_sync_manual'
 ORDER BY created_at DESC LIMIT 20;
 
 # User creation history
-SELECT * FROM audit_logs 
+SELECT * FROM audit_logs
 WHERE entity_type = 'User' AND entity_id = {user_id}
 ORDER BY created_at DESC;
 ```
@@ -292,12 +307,12 @@ ORDER BY created_at DESC;
 
 ### Common Errors
 
-| Error | Cause | Solution |
-|-------|-------|----------|
-| `ERP API error: 401` | Invalid API key | Check `ERP_API_KEY` in .env |
-| `ERP API error: 404` | Wrong endpoint | Verify `ERP_API_URL` |
-| `Connection timeout` | ERP server down | Check ERP server status |
-| `Invalid employee data` | Missing required fields | Update ERP data format |
+| Error                   | Cause                   | Solution                    |
+| ----------------------- | ----------------------- | --------------------------- |
+| `ERP API error: 401`    | Invalid API key         | Check `ERP_API_KEY` in .env |
+| `ERP API error: 404`    | Wrong endpoint          | Verify `ERP_API_URL`        |
+| `Connection timeout`    | ERP server down         | Check ERP server status     |
+| `Invalid employee data` | Missing required fields | Update ERP data format      |
 
 ### Logging
 
@@ -317,6 +332,7 @@ storage/logs/laravel.log
 ## Security Considerations
 
 ### API Security
+
 - ✅ Bearer token authentication
 - ✅ Super-admin role required
 - ✅ IP logging on all operations
@@ -324,11 +340,13 @@ storage/logs/laravel.log
 - ✅ SSL certificate verification (default)
 
 ### Rate Limiting
+
 - No rate limit on scheduled sync
 - Manual sync limited by Laravel rate limiting
 - Retry logic with exponential backoff (future)
 
 ### Data Protection
+
 - Passwords generated randomly (32 chars)
 - Sensitive data logged securely
 - Access logs maintained in audit trail
@@ -350,11 +368,13 @@ if (config('erp.jit_validation')) {
 ```
 
 **Enable:**
+
 ```bash
 ERP_JIT_VALIDATION=true
 ```
 
 **Effect:**
+
 - Deactivates users immediately when removed from ERP
 - Prevents access by former employees
 - Minor performance impact (one extra API call per login)
@@ -364,42 +384,47 @@ ERP_JIT_VALIDATION=true
 ### Sync not running?
 
 1. Check if enabled:
-   ```bash
-   php artisan tinker
-   > config('erp.enabled')
-   ```
+
+    ```bash
+    php artisan tinker
+    > config('erp.enabled')
+    ```
 
 2. Check Laravel scheduler:
-   ```bash
-   # Add to crontab if missing
-   * * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
-   ```
+
+    ```bash
+    # Add to crontab if missing
+    * * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
+    ```
 
 3. Run manually to debug:
-   ```bash
-   php artisan erp:sync -v
-   ```
+    ```bash
+    php artisan erp:sync -v
+    ```
 
 ### Users not created?
 
 1. Check API response format:
-   ```bash
-   curl -H "Authorization: Bearer YOUR_KEY" https://erp.plnip.co.id/api/employees
-   ```
+
+    ```bash
+    curl -H "Authorization: Bearer YOUR_KEY" https://erp.plnip.co.id/api/employees
+    ```
 
 2. Check logs:
-   ```bash
-   tail -f storage/logs/security.log
-   ```
+
+    ```bash
+    tail -f storage/logs/security.log
+    ```
 
 3. Verify employee_id uniqueness in database
 
 ### Role not assigned?
 
 1. Check access_group mapping:
-   ```php
-   UserService::mapAccessGroupToRole('YOUR_GROUP_NAME')
-   ```
+
+    ```php
+    UserService::mapAccessGroupToRole('YOUR_GROUP_NAME')
+    ```
 
 2. Check if role override is active
 3. Run sync again after role assignment fixes
@@ -407,11 +432,13 @@ ERP_JIT_VALIDATION=true
 ## Performance
 
 ### Sync Duration
+
 - Small org (< 100 users): ~5-10 seconds
 - Medium org (100-500 users): ~30-60 seconds
 - Large org (500+ users): 1-3 minutes
 
 ### Optimization
+
 - Sync during off-peak hours (default 2:00 AM)
 - Disable JIT validation if not needed
 - Archive old audit logs periodically
@@ -430,6 +457,7 @@ ERP_JIT_VALIDATION=true
 ## Support
 
 For issues or questions:
+
 1. Check logs in `storage/logs/`
 2. Review audit trail in database
 3. Run `php artisan erp:sync -v` for detailed output

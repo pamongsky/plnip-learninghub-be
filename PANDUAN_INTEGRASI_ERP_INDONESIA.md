@@ -1,6 +1,7 @@
 # 📖 PANDUAN INTEGRASI ERP - REFERENSI LENGKAP
 
 ## Daftar Isi
+
 1. [Ringkasan](#ringkasan)
 2. [Arsitektur](#arsitektur)
 3. [Konfigurasi](#konfigurasi)
@@ -31,18 +32,21 @@ Sistem integrasi ERP PLN IP Learning Hub memungkinkan:
 ### Strategi Sinkronisasi
 
 #### 1. Scheduled Sync (UTAMA)
+
 - Berjalan otomatis setiap hari (default: jam 2:00 pagi)
 - Terjadwal via Laravel scheduler
 - Dapat dikonfigurasi via `ERP_SYNC_SCHEDULE`
 - **Cocok untuk:** Update data user yang predictable
 
 #### 2. Just-In-Time (JIT) Validation
+
 - Cek status real-time saat login
 - Validasi user masih aktif di ERP
 - Requires `ERP_JIT_VALIDATION=true`
 - **Cocok untuk:** Keamanan, deaktivasi user langsung
 
 #### 3. Webhook (Masa Depan)
+
 - ERP push updates ke portal
 - Sinkronisasi real-time saat user berubah
 - Requires `ERP_WEBHOOK_ENABLED=true` dan webhook token
@@ -51,6 +55,7 @@ Sistem integrasi ERP PLN IP Learning Hub memungkinkan:
 ### Identifikasi User
 
 **Employee ID** adalah primary key untuk semua operasi:
+
 - Permanent dan tidak pernah berubah
 - Unik di seluruh organisasi
 - Tidak bisa duplikat
@@ -76,12 +81,12 @@ AuditLog (track semua perubahan)
 
 Access group di ERP dipetakan ke role portal:
 
-| ERP access_group | Portal Role | Tingkat Izin |
-|---|---|---|
-| `SUPERADMIN` | `super-admin` | Full system access |
-| `ADMIN_UNIT` | `admin` | Department admin |
-| `INSTRUCTOR` | `instructor` | Class management |
-| `USER` | `user` | Learning access only |
+| ERP access_group | Portal Role   | Tingkat Izin         |
+| ---------------- | ------------- | -------------------- |
+| `SUPERADMIN`     | `super-admin` | Full system access   |
+| `ADMIN_UNIT`     | `admin`       | Department admin     |
+| `INSTRUCTOR`     | `instructor`  | Class management     |
+| `USER`           | `user`        | Learning access only |
 
 ---
 
@@ -135,6 +140,7 @@ config('erp.jit_validation') // JIT validation enabled?
 Setelah `ERP_ENABLED=true`, sync berjalan otomatis setiap hari pada waktu yang dikonfigurasi.
 
 **Monitor log:**
+
 ```bash
 # Lihat operasi sync
 tail -f storage/logs/audit.log
@@ -150,16 +156,17 @@ tail -f storage/logs/security.log
 **Headers:** `Authorization: Bearer {sanctum_token}`
 
 **Response:**
+
 ```json
 {
-  "message": "Sinkronisasi ERP berhasil diselesaikan",
-  "stats": {
-    "created": 15,
-    "updated": 8,
-    "skipped": 2,
-    "errors": 0
-  },
-  "timestamp": "2024-01-15T10:30:45Z"
+    "message": "Sinkronisasi ERP berhasil diselesaikan",
+    "stats": {
+        "created": 15,
+        "updated": 8,
+        "skipped": 2,
+        "errors": 0
+    },
+    "timestamp": "2024-01-15T10:30:45Z"
 }
 ```
 
@@ -179,6 +186,7 @@ php artisan erp:sync --force
 ```
 
 **Output:**
+
 ```
 🔄 Memulai sinkronisasi ERP user...
 
@@ -201,12 +209,13 @@ php artisan erp:sync --force
 
 Setiap user memiliki field `source` untuk melacak asal data:
 
-| Source | Keterangan | Editable | Sync |
-|--------|-----------|----------|------|
-| `manual` | Dibuat fase dev | ✅ Ya | ❌ Tidak Pernah |
-| `erp` | Dibuat dari sync ERP | ❌ Tidak | ✅ Auto-sync |
+| Source   | Keterangan           | Editable | Sync            |
+| -------- | -------------------- | -------- | --------------- |
+| `manual` | Dibuat fase dev      | ✅ Ya    | ❌ Tidak Pernah |
+| `erp`    | Dibuat dari sync ERP | ❌ Tidak | ✅ Auto-sync    |
 
 **Transisi Dev ke Production:**
+
 - Fase dev: Buat user manual (`source=manual`)
 - Production: Aktifkan ERP sync (`ERP_ENABLED=true`)
 - User manual tetap ada, tidak ditimpa ERP sync
@@ -217,6 +226,7 @@ Setiap user memiliki field `source` untuk melacak asal data:
 #### Assign Role Otomatis
 
 Saat user sync dari ERP:
+
 1. Baca `access_group` dari data ERP
 2. Petakan ke role portal (lihat tabel mapping)
 3. Assign role otomatis
@@ -226,6 +236,7 @@ Saat user sync dari ERP:
 Super-admin bisa override role user manapun:
 
 **Via API:**
+
 ```
 POST /api/superadmin/users/{user}/override-role
 {
@@ -235,6 +246,7 @@ POST /api/superadmin/users/{user}/override-role
 ```
 
 **Efek:**
+
 - Role asli user disimpan di field `role_override`
 - Override role tetap ada meski data ERP berubah
 - Perubahan dicatat dalam audit log dengan alasan
@@ -259,14 +271,15 @@ AuditLog::create([
 ```
 
 **Lihat audit log:**
+
 ```bash
 # Operasi sync terbaru
-SELECT * FROM audit_logs 
-WHERE action = 'erp_sync_manual' 
+SELECT * FROM audit_logs
+WHERE action = 'erp_sync_manual'
 ORDER BY created_at DESC LIMIT 20;
 
 # Riwayat perubahan user
-SELECT * FROM audit_logs 
+SELECT * FROM audit_logs
 WHERE entity_type = 'User' AND entity_id = {user_id}
 ORDER BY created_at DESC;
 ```
@@ -277,12 +290,12 @@ ORDER BY created_at DESC;
 
 ### Error Umum
 
-| Error | Penyebab | Solusi |
-|-------|---------|--------|
-| `ERP API error: 401` | API key tidak valid | Cek `ERP_API_KEY` di .env |
-| `ERP API error: 404` | Endpoint salah | Verifikasi `ERP_API_URL` |
-| `Connection timeout` | Server ERP down | Cek status server ERP |
-| `Invalid employee data` | Field required hilang | Update format data ERP |
+| Error                   | Penyebab              | Solusi                    |
+| ----------------------- | --------------------- | ------------------------- |
+| `ERP API error: 401`    | API key tidak valid   | Cek `ERP_API_KEY` di .env |
+| `ERP API error: 404`    | Endpoint salah        | Verifikasi `ERP_API_URL`  |
+| `Connection timeout`    | Server ERP down       | Cek status server ERP     |
+| `Invalid employee data` | Field required hilang | Update format data ERP    |
 
 ### Logging
 
@@ -306,42 +319,47 @@ storage/logs/laravel.log
 ### Sync Tidak Berjalan?
 
 1. Cek apakah enabled:
-   ```bash
-   php artisan tinker
-   > config('erp.enabled')
-   ```
+
+    ```bash
+    php artisan tinker
+    > config('erp.enabled')
+    ```
 
 2. Cek Laravel scheduler:
-   ```bash
-   # Tambah ke crontab jika belum ada
-   * * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
-   ```
+
+    ```bash
+    # Tambah ke crontab jika belum ada
+    * * * * * cd /path/to/project && php artisan schedule:run >> /dev/null 2>&1
+    ```
 
 3. Jalankan manual untuk debug:
-   ```bash
-   php artisan erp:sync -v
-   ```
+    ```bash
+    php artisan erp:sync -v
+    ```
 
 ### User Tidak Dibuat?
 
 1. Cek format response API:
-   ```bash
-   curl -H "Authorization: Bearer YOUR_KEY" https://erp.plnip.co.id/api/employees
-   ```
+
+    ```bash
+    curl -H "Authorization: Bearer YOUR_KEY" https://erp.plnip.co.id/api/employees
+    ```
 
 2. Cek log:
-   ```bash
-   tail -f storage/logs/security.log
-   ```
+
+    ```bash
+    tail -f storage/logs/security.log
+    ```
 
 3. Verifikasi employee_id unik di database
 
 ### Role Tidak Ter-assign?
 
 1. Cek pemetaan access_group:
-   ```php
-   UserService::mapAccessGroupToRole('YOUR_GROUP_NAME')
-   ```
+
+    ```php
+    UserService::mapAccessGroupToRole('YOUR_GROUP_NAME')
+    ```
 
 2. Cek apakah role override aktif
 3. Jalankan sync lagi setelah perbaikan role assignment
@@ -351,16 +369,19 @@ storage/logs/laravel.log
 ## Fitur Siap Pakai
 
 ### Primary: Scheduled Sync ✅
+
 - Eksekusi harian pada waktu terjadwal
 - Otomatis via Laravel scheduler
 - Sempurna untuk update data predictable
 
 ### Secondary: JIT Validation ⚙️
+
 - Cek status ERP saat login
 - Enable: `ERP_JIT_VALIDATION=true`
 - Deaktivasi user removed segera
 
 ### Future: Webhook Support 🔮
+
 - ERP push updates ke portal
 - Sinkronisasi real-time
 - Enable: `ERP_WEBHOOK_ENABLED=true`
@@ -370,11 +391,13 @@ storage/logs/laravel.log
 ## Performance
 
 ### Durasi Sync
+
 - Organisasi kecil (< 100 user): ~5-10 detik
 - Organisasi menengah (100-500 user): ~30-60 detik
 - Organisasi besar (500+ user): 1-3 menit
 
 ### Optimisasi
+
 - Jalankan sync pada jam off-peak (default 2:00 pagi)
 - Disable JIT validation jika tidak diperlukan
 - Archive audit log lama secara berkala
@@ -385,6 +408,7 @@ storage/logs/laravel.log
 ## Support
 
 Untuk pertanyaan:
+
 1. Periksa log di `storage/logs/`
 2. Review audit trail di database
 3. Jalankan `php artisan erp:sync -v` untuk output detail

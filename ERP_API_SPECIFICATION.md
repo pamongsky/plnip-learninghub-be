@@ -3,12 +3,14 @@
 ## Required Endpoint Format
 
 ### Endpoint Details
+
 - **Method:** `GET`
 - **URL:** Configured in `ERP_API_URL` environment variable
 - **Default:** `https://erp.plnip.co.id/api/employees`
 - **Authentication:** Bearer token in Authorization header
 
 ### Request Example
+
 ```bash
 curl -X GET "https://erp.plnip.co.id/api/employees" \
   -H "Authorization: Bearer YOUR_API_KEY" \
@@ -19,47 +21,49 @@ curl -X GET "https://erp.plnip.co.id/api/employees" \
 
 ```json
 {
-  "employees": [
-    {
-      "employee_id": "EMP001234",
-      "name": "John Doe",
-      "email": "john.doe@plnip.co.id",
-      "phone": "082112345678",
-      "department": "Transmisi",
-      "position": "Senior Engineer",
-      "access_group": "ADMIN_UNIT",
-      "is_active": true
-    },
-    {
-      "employee_id": "EMP001235",
-      "name": "Jane Smith",
-      "email": "jane.smith@plnip.co.id",
-      "phone": "082112345679",
-      "department": "Distribusi",
-      "position": "Analyst",
-      "access_group": "INSTRUCTOR",
-      "is_active": true
-    },
-    {
-      "employee_id": "EMP001236",
-      "name": "Bob Johnson",
-      "email": "bob.johnson@plnip.co.id",
-      "phone": null,
-      "department": "IT",
-      "position": "System Administrator",
-      "access_group": "SUPERADMIN",
-      "is_active": false
-    }
-  ]
+    "employees": [
+        {
+            "employee_id": "EMP001234",
+            "name": "John Doe",
+            "email": "john.doe@plnip.co.id",
+            "phone": "082112345678",
+            "department": "Transmisi",
+            "position": "Senior Engineer",
+            "access_group": "ADMIN_UNIT",
+            "is_active": true
+        },
+        {
+            "employee_id": "EMP001235",
+            "name": "Jane Smith",
+            "email": "jane.smith@plnip.co.id",
+            "phone": "082112345679",
+            "department": "Distribusi",
+            "position": "Analyst",
+            "access_group": "INSTRUCTOR",
+            "is_active": true
+        },
+        {
+            "employee_id": "EMP001236",
+            "name": "Bob Johnson",
+            "email": "bob.johnson@plnip.co.id",
+            "phone": null,
+            "department": "IT",
+            "position": "System Administrator",
+            "access_group": "SUPERADMIN",
+            "is_active": false
+        }
+    ]
 }
 ```
 
 ## Field Specifications
 
 ### REQUIRED Fields
+
 All three of these fields MUST be present for each employee:
 
 #### `employee_id` (string)
+
 - **Type:** String
 - **Unique:** Yes, must be unique per organization
 - **Mutable:** No, never changes
@@ -69,6 +73,7 @@ All three of these fields MUST be present for each employee:
 - **Example:** `"EMP001234"`, `"E-2024-001234"`, `"ID-PL-001234"`
 
 **✅ Valid Examples:**
+
 ```
 "EMP001234"
 "E001234"
@@ -77,6 +82,7 @@ All three of these fields MUST be present for each employee:
 ```
 
 #### `name` (string)
+
 - **Type:** String
 - **Unique:** No
 - **Mutable:** Yes (will be updated on sync)
@@ -86,6 +92,7 @@ All three of these fields MUST be present for each employee:
 - **Example:** `"John Doe"`, `"Dr. Jane Smith, S.E., M.Eng."`
 
 **✅ Valid Examples:**
+
 ```
 "John Doe"
 "Dr. Jane Smith"
@@ -94,6 +101,7 @@ All three of these fields MUST be present for each employee:
 ```
 
 #### `email` (string)
+
 - **Type:** String
 - **Unique:** Should be unique (per email standards)
 - **Mutable:** Yes (will be updated on sync)
@@ -103,6 +111,7 @@ All three of these fields MUST be present for each employee:
 - **Example:** `"john.doe@plnip.co.id"`
 
 **✅ Valid Examples:**
+
 ```
 "john.doe@plnip.co.id"
 "jane.smith@training.plnip.co.id"
@@ -110,6 +119,7 @@ All three of these fields MUST be present for each employee:
 ```
 
 **❌ Invalid Examples (will be rejected):**
+
 ```
 "john.doe"                     # No domain
 "@plnip.co.id"                 # No local part
@@ -118,9 +128,11 @@ All three of these fields MUST be present for each employee:
 ```
 
 ### OPTIONAL Fields
+
 These fields can be omitted or null:
 
 #### `phone` (string | null)
+
 - **Type:** String or null
 - **Unique:** No
 - **Max Length:** 20 characters
@@ -128,6 +140,7 @@ These fields can be omitted or null:
 - **Example:** `"082112345678"`, `"+62-821-1234-5678"`, `"(021) 123-4567"`
 
 **Valid Examples:**
+
 ```json
 "phone": "082112345678"
 "phone": "+62-821-1234-5678"
@@ -136,6 +149,7 @@ These fields can be omitted or null:
 ```
 
 #### `department` (string | null)
+
 - **Type:** String or null
 - **Unique:** No
 - **Max Length:** 255 characters
@@ -143,6 +157,7 @@ These fields can be omitted or null:
 - **Example:** `"Transmisi"`, `"Pusat"`, `"Corporate"`
 
 **Valid Examples:**
+
 ```json
 "department": "Transmisi"
 "department": "Pembangkitan"
@@ -154,6 +169,7 @@ These fields can be omitted or null:
 ```
 
 #### `position` (string | null)
+
 - **Type:** String or null
 - **Unique:** No
 - **Max Length:** 255 characters
@@ -161,6 +177,7 @@ These fields can be omitted or null:
 - **Example:** `"Senior Engineer"`, `"Manager"`, `"Analyst"`
 
 **Valid Examples:**
+
 ```json
 "position": "Senior Engineer"
 "position": "Project Manager"
@@ -170,6 +187,7 @@ These fields can be omitted or null:
 ```
 
 #### `access_group` (string | null)
+
 - **Type:** String or null
 - **Unique:** No
 - **Allowed Values:** `SUPERADMIN`, `ADMIN_UNIT`, `INSTRUCTOR`, `USER`
@@ -178,6 +196,7 @@ These fields can be omitted or null:
 - **Mutable:** Yes (will be updated on sync)
 
 **Valid Examples:**
+
 ```json
 "access_group": "SUPERADMIN"      # → super-admin role
 "access_group": "ADMIN_UNIT"      # → admin role
@@ -187,6 +206,7 @@ These fields can be omitted or null:
 ```
 
 **❌ Invalid Examples (will cause errors):**
+
 ```json
 "access_group": "ADMIN"           # Wrong value
 "access_group": "Manager"         # Not in mapping
@@ -194,6 +214,7 @@ These fields can be omitted or null:
 ```
 
 #### `is_active` (boolean | null)
+
 - **Type:** Boolean or null
 - **Unique:** No
 - **Default (if null):** `true`
@@ -202,6 +223,7 @@ These fields can be omitted or null:
 - **Example:** `true`, `false`
 
 **Valid Examples:**
+
 ```json
 "is_active": true
 "is_active": false
@@ -211,19 +233,21 @@ These fields can be omitted or null:
 ## Complete Examples
 
 ### Minimal Response (Only Required Fields)
+
 ```json
 {
-  "employees": [
-    {
-      "employee_id": "EMP001234",
-      "name": "John Doe",
-      "email": "john.doe@plnip.co.id"
-    }
-  ]
+    "employees": [
+        {
+            "employee_id": "EMP001234",
+            "name": "John Doe",
+            "email": "john.doe@plnip.co.id"
+        }
+    ]
 }
 ```
 
 **Result in Portal:**
+
 - Name: John Doe
 - Email: john.doe@plnip.co.id
 - Employee ID: EMP001234
@@ -235,68 +259,70 @@ These fields can be omitted or null:
 - Role: user (from default access_group)
 
 ### Complete Response (All Fields)
+
 ```json
 {
-  "employees": [
-    {
-      "employee_id": "EMP001234",
-      "name": "Dr. John Doe",
-      "email": "john.doe@plnip.co.id",
-      "phone": "082112345678",
-      "department": "Transmisi",
-      "position": "Senior Engineer",
-      "access_group": "ADMIN_UNIT",
-      "is_active": true
-    },
-    {
-      "employee_id": "EMP001235",
-      "name": "Jane Smith",
-      "email": "jane.smith@plnip.co.id",
-      "phone": "+62-821-9876543",
-      "department": "Distribusi",
-      "position": "Manager",
-      "access_group": "INSTRUCTOR",
-      "is_active": true
-    },
-    {
-      "employee_id": "EMP001236",
-      "name": "Bob Johnson",
-      "email": "bob.johnson@plnip.co.id",
-      "phone": null,
-      "department": "IT",
-      "position": "Analyst",
-      "access_group": "USER",
-      "is_active": false
-    }
-  ]
+    "employees": [
+        {
+            "employee_id": "EMP001234",
+            "name": "Dr. John Doe",
+            "email": "john.doe@plnip.co.id",
+            "phone": "082112345678",
+            "department": "Transmisi",
+            "position": "Senior Engineer",
+            "access_group": "ADMIN_UNIT",
+            "is_active": true
+        },
+        {
+            "employee_id": "EMP001235",
+            "name": "Jane Smith",
+            "email": "jane.smith@plnip.co.id",
+            "phone": "+62-821-9876543",
+            "department": "Distribusi",
+            "position": "Manager",
+            "access_group": "INSTRUCTOR",
+            "is_active": true
+        },
+        {
+            "employee_id": "EMP001236",
+            "name": "Bob Johnson",
+            "email": "bob.johnson@plnip.co.id",
+            "phone": null,
+            "department": "IT",
+            "position": "Analyst",
+            "access_group": "USER",
+            "is_active": false
+        }
+    ]
 }
 ```
 
 ### Mixed Optional Fields
+
 ```json
 {
-  "employees": [
-    {
-      "employee_id": "EMP001234",
-      "name": "John Doe",
-      "email": "john.doe@plnip.co.id",
-      "phone": "082112345678",
-      "department": null,
-      "position": "Engineer",
-      "access_group": "INSTRUCTOR",
-      "is_active": true
-    },
-    {
-      "employee_id": "EMP001235",
-      "name": "Jane Smith",
-      "email": "jane.smith@plnip.co.id",
-      "phone": null,
-      "department": "Transmisi",
-      "position": null,
-      "access_group": null,
-      "is_active": true
-    }
-  ]
+    "employees": [
+        {
+            "employee_id": "EMP001234",
+            "name": "John Doe",
+            "email": "john.doe@plnip.co.id",
+            "phone": "082112345678",
+            "department": null,
+            "position": "Engineer",
+            "access_group": "INSTRUCTOR",
+            "is_active": true
+        },
+        {
+            "employee_id": "EMP001235",
+            "name": "Jane Smith",
+            "email": "jane.smith@plnip.co.id",
+            "phone": null,
+            "department": "Transmisi",
+            "position": null,
+            "access_group": null,
+            "is_active": true
+        }
+    ]
 }
 ```
 
@@ -305,6 +331,7 @@ These fields can be omitted or null:
 ### Success Responses
 
 #### 200 OK (Successful)
+
 - All employees returned successfully
 - Response contains valid JSON structure
 - Expected response time: < 30 seconds
@@ -320,6 +347,7 @@ Content-Type: application/json
 ### Error Responses
 
 #### 401 Unauthorized
+
 - API key missing or invalid
 - Token expired
 - Wrong credentials
@@ -336,6 +364,7 @@ Content-Type: application/json
 **Solution:** Update `ERP_API_KEY` in .env
 
 #### 404 Not Found
+
 - Endpoint doesn't exist
 - Wrong URL path
 
@@ -351,6 +380,7 @@ Content-Type: application/json
 **Solution:** Verify `ERP_API_URL` in .env
 
 #### 500 Internal Server Error
+
 - Server error on ERP side
 - Database issue
 
@@ -366,6 +396,7 @@ Content-Type: application/json
 **Solution:** Contact ERP team to check server status
 
 #### 503 Service Unavailable
+
 - ERP server is down/maintenance
 - Too many requests
 
@@ -383,6 +414,7 @@ Content-Type: application/json
 ## Data Validation Rules
 
 ### Employee ID Validation
+
 ```
 ✅ MUST be present
 ✅ MUST be unique per organization
@@ -393,6 +425,7 @@ Content-Type: application/json
 ```
 
 ### Email Validation
+
 ```
 ✅ MUST be valid email format
 ✅ MUST contain @ symbol
@@ -403,6 +436,7 @@ Content-Type: application/json
 ```
 
 ### Name Validation
+
 ```
 ✅ MUST be present
 ✅ MUST be non-empty string
@@ -412,6 +446,7 @@ Content-Type: application/json
 ```
 
 ### Access Group Validation
+
 ```
 ✅ MUST be one of: SUPERADMIN, ADMIN_UNIT, INSTRUCTOR, USER
 ✅ CAN be null (defaults to USER)
@@ -423,6 +458,7 @@ Content-Type: application/json
 ## Sync Behavior Based on Data
 
 ### New Employee (not in database)
+
 ```
 Input: employee_id="EMP001234" (doesn't exist)
 Action: Create new user
@@ -433,6 +469,7 @@ Result: User created with all data
 ```
 
 ### Existing ERP Employee (in database with source=erp)
+
 ```
 Input: employee_id="EMP001234" (exists with source=erp)
 Action: Update user data
@@ -443,6 +480,7 @@ Result: User updated, changes logged in audit
 ```
 
 ### Existing Manual User (in database with source=manual)
+
 ```
 Input: employee_id="EMP001234" (exists with source=manual)
 Action: Skip this user
@@ -451,6 +489,7 @@ Result: No changes, counted as "skipped"
 ```
 
 ### Inactive Employee (is_active=false)
+
 ```
 Input: is_active=false
 Action: User created/updated as inactive
@@ -491,6 +530,7 @@ Result: User exists but is_active=false
 ## Support & Troubleshooting
 
 **If API returns error:**
+
 1. Check API endpoint URL
 2. Verify API key/token
 3. Check VPN/network connectivity
@@ -498,6 +538,7 @@ Result: User exists but is_active=false
 5. Contact ERP team
 
 **If sync fails:**
+
 1. Check `storage/logs/security.log`
 2. Check `storage/logs/audit.log`
 3. Run `php artisan erp:sync -v` for details
@@ -505,6 +546,7 @@ Result: User exists but is_active=false
 5. Check user/role configuration
 
 **For detailed help:**
+
 - See `ERP_INTEGRATION_GUIDE.md` (Troubleshooting section)
 - See `ERP_QUICKSTART.md` (Common Issues section)
 - Review logs at `storage/logs/`

@@ -2,19 +2,20 @@
 
 ## Quick Navigation
 
-| Document | Purpose | Read Time | Audience |
-|----------|---------|-----------|----------|
-| **[ERP_QUICKSTART.md](ERP_QUICKSTART.md)** | 5-minute setup guide | 5 min | Developers |
-| **[ERP_SYNC_IMPLEMENTATION.md](ERP_SYNC_IMPLEMENTATION.md)** | Technical implementation details | 15 min | Developers/DevOps |
-| **[ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md)** | Comprehensive reference | 30 min | Developers/Operations |
-| **[ERP_API_SPECIFICATION.md](ERP_API_SPECIFICATION.md)** | API format spec for ERP team | 10 min | ERP Team |
-| **[IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md)** | What was built | 10 min | Project Managers |
+| Document                                                     | Purpose                          | Read Time | Audience              |
+| ------------------------------------------------------------ | -------------------------------- | --------- | --------------------- |
+| **[ERP_QUICKSTART.md](ERP_QUICKSTART.md)**                   | 5-minute setup guide             | 5 min     | Developers            |
+| **[ERP_SYNC_IMPLEMENTATION.md](ERP_SYNC_IMPLEMENTATION.md)** | Technical implementation details | 15 min    | Developers/DevOps     |
+| **[ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md)**     | Comprehensive reference          | 30 min    | Developers/Operations |
+| **[ERP_API_SPECIFICATION.md](ERP_API_SPECIFICATION.md)**     | API format spec for ERP team     | 10 min    | ERP Team              |
+| **[IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md)** | What was built                   | 10 min    | Project Managers      |
 
 ---
 
 ## 🚀 Getting Started (Choose Your Path)
 
 ### Path 1: I Need to Deploy This Today ⏰
+
 1. Read: [ERP_QUICKSTART.md](ERP_QUICKSTART.md)
 2. Configure: Edit `.env` with ERP credentials
 3. Test: Run `php artisan erp:sync -v`
@@ -23,6 +24,7 @@
 **Time Required:** 15 minutes
 
 ### Path 2: I Need to Understand How It Works 🎓
+
 1. Read: [ERP_SYNC_IMPLEMENTATION.md](ERP_SYNC_IMPLEMENTATION.md) → Architecture section
 2. Review: Code files listed below
 3. Deep dive: [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md)
@@ -30,6 +32,7 @@
 **Time Required:** 1 hour
 
 ### Path 3: I'm Implementing the ERP API 🔧
+
 1. Read: [ERP_API_SPECIFICATION.md](ERP_API_SPECIFICATION.md)
 2. Implement: Following the exact format
 3. Test: Using provided examples
@@ -42,6 +45,7 @@
 ## 📁 File Structure
 
 ### Backend Services
+
 ```
 app/Services/
 ├── ERPSyncService.php (285 lines)
@@ -55,6 +59,7 @@ app/Services/
 ```
 
 ### Console Commands
+
 ```
 app/Console/
 ├── Commands/
@@ -66,6 +71,7 @@ app/Console/
 ```
 
 ### Configuration
+
 ```
 config/erp.php (31 lines)
 ├── enabled
@@ -78,6 +84,7 @@ config/erp.php (31 lines)
 ```
 
 ### Controllers
+
 ```
 app/Http/Controllers/API/
 └── UserController.php (modified)
@@ -85,12 +92,14 @@ app/Http/Controllers/API/
 ```
 
 ### Routes
+
 ```
 routes/api.php (modified)
 └── POST /superadmin/sync-erp  # New endpoint
 ```
 
 ### Environment
+
 ```
 .env.example (modified)
 ├── ERP_ENABLED=false
@@ -100,6 +109,7 @@ routes/api.php (modified)
 ```
 
 ### Frontend
+
 ```
 app/superadmin/users/
 └── page.tsx (modified)
@@ -113,21 +123,27 @@ app/superadmin/users/
 ## 📖 Documentation Map
 
 ### For New Developers
+
 **Start Here:** [ERP_QUICKSTART.md](ERP_QUICKSTART.md)
+
 - 5-minute setup guide
 - Common issues section
 - Testing checklist
 - Command reference
 
 ### For Infrastructure/DevOps
+
 **Read:** [ERP_SYNC_IMPLEMENTATION.md](ERP_SYNC_IMPLEMENTATION.md)
+
 - Deployment checklist
 - Performance metrics
 - Monitoring guidance
 - Log locations
 
 ### For Integration Planning
+
 **Read:** [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md)
+
 - Complete architecture
 - Security considerations
 - Configuration reference
@@ -135,7 +151,9 @@ app/superadmin/users/
 - Future enhancements
 
 ### For ERP Team
+
 **Read:** [ERP_API_SPECIFICATION.md](ERP_API_SPECIFICATION.md)
+
 - Exact API format required
 - Field specifications
 - Validation rules
@@ -143,7 +161,9 @@ app/superadmin/users/
 - Testing checklist
 
 ### Project Overview
+
 **Read:** [IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md)
+
 - What was implemented
 - Features overview
 - Design decisions
@@ -154,12 +174,14 @@ app/superadmin/users/
 ## 🎯 Key Concepts Quick Reference
 
 ### User Source Field
+
 ```
 source='manual'  → Created in dev phase (never overwritten)
 source='erp'     → Created from ERP sync (auto-updated)
 ```
 
 ### Role Mapping
+
 ```
 SUPERADMIN → super-admin (full access)
 ADMIN_UNIT → admin       (department management)
@@ -168,11 +190,13 @@ USER       → user        (learning only)
 ```
 
 ### Sync Strategies
+
 1. **Scheduled** ✅ Primary - Daily at configured time
 2. **JIT** ⚙️ Optional - Check at login time
 3. **Webhook** 🔮 Future - ERP pushes updates
 
 ### Security Layers
+
 - Employee_id as immutable key
 - Manual users preserved
 - All changes logged
@@ -187,19 +211,21 @@ USER       → user        (learning only)
 ### "How do I...?"
 
 #### Enable ERP Integration
+
 1. Get API credentials from ERP team
 2. Edit `.env`:
-   ```bash
-   ERP_ENABLED=true
-   ERP_API_URL=https://...
-   ERP_API_KEY=your_key
-   ```
+    ```bash
+    ERP_ENABLED=true
+    ERP_API_URL=https://...
+    ERP_API_KEY=your_key
+    ```
 3. Run: `php artisan erp:sync`
 4. Check: `storage/logs/audit.log`
 
 **Read:** [ERP_QUICKSTART.md](ERP_QUICKSTART.md#step-2-configure-environment)
 
 #### Trigger Manual Sync
+
 - **Via UI:** Click "Sync ERP" button in super admin panel
 - **Via CLI:** `php artisan erp:sync -v`
 - **Via API:** `POST /superadmin/sync-erp` (with token)
@@ -207,6 +233,7 @@ USER       → user        (learning only)
 **Read:** [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md#usage)
 
 #### Monitor Sync Operations
+
 ```bash
 tail -f storage/logs/audit.log | grep "ERP"
 tail -f storage/logs/security.log | grep "error"
@@ -215,6 +242,7 @@ tail -f storage/logs/security.log | grep "error"
 **Read:** [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md#audit-logging)
 
 #### Fix Sync Errors
+
 1. Check `storage/logs/security.log`
 2. Check ERP API is responding
 3. Verify API key and credentials
@@ -223,6 +251,7 @@ tail -f storage/logs/security.log | grep "error"
 **Read:** [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes)
 
 #### Change Sync Time
+
 1. Edit `.env`: `ERP_SYNC_SCHEDULE=03:00`
 2. Clear cache: `php artisan config:clear`
 3. Restart scheduler
@@ -230,6 +259,7 @@ tail -f storage/logs/security.log | grep "error"
 **Read:** [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md#environment-variables)
 
 #### Enable JIT Validation
+
 1. Edit `.env`: `ERP_JIT_VALIDATION=true`
 2. Clear cache: `php artisan config:clear`
 3. Users checked at next login
@@ -240,26 +270,26 @@ tail -f storage/logs/security.log | grep "error"
 
 ## 🔍 Troubleshooting Index
 
-| Error | Location | Solution |
-|-------|----------|----------|
-| "API error: 401" | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes) | Check API key |
-| "Connection timeout" | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes) | Increase timeout or check ERP server |
-| "Sync not running" | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes) | Verify scheduler active |
-| "Users not created" | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes) | Check API response format |
-| "No employees data" | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes) | Verify ERP API response |
-| Full list | [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md#error-handling) | Comprehensive troubleshooting |
+| Error                | Location                                                            | Solution                             |
+| -------------------- | ------------------------------------------------------------------- | ------------------------------------ |
+| "API error: 401"     | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes)        | Check API key                        |
+| "Connection timeout" | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes)        | Increase timeout or check ERP server |
+| "Sync not running"   | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes)        | Verify scheduler active              |
+| "Users not created"  | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes)        | Check API response format            |
+| "No employees data"  | [ERP_QUICKSTART.md](ERP_QUICKSTART.md#-common-issues--fixes)        | Verify ERP API response              |
+| Full list            | [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md#error-handling) | Comprehensive troubleshooting        |
 
 ---
 
 ## 📊 Documentation Statistics
 
-| Document | Lines | Topics | Time |
-|----------|-------|--------|------|
-| ERP_QUICKSTART.md | 250+ | Quick start, common issues | 5 min |
-| ERP_SYNC_IMPLEMENTATION.md | 400+ | Components, architecture, deployment | 15 min |
-| ERP_INTEGRATION_GUIDE.md | 550+ | Complete reference, examples, future | 30 min |
-| ERP_API_SPECIFICATION.md | 600+ | API format, validation, examples | 10 min |
-| IMPLEMENTATION_COMPLETE.md | 350+ | What was built, status, checklist | 10 min |
+| Document                   | Lines | Topics                               | Time   |
+| -------------------------- | ----- | ------------------------------------ | ------ |
+| ERP_QUICKSTART.md          | 250+  | Quick start, common issues           | 5 min  |
+| ERP_SYNC_IMPLEMENTATION.md | 400+  | Components, architecture, deployment | 15 min |
+| ERP_INTEGRATION_GUIDE.md   | 550+  | Complete reference, examples, future | 30 min |
+| ERP_API_SPECIFICATION.md   | 600+  | API format, validation, examples     | 10 min |
+| IMPLEMENTATION_COMPLETE.md | 350+  | What was built, status, checklist    | 10 min |
 
 **Total Documentation:** 2,150+ lines of comprehensive guides
 
@@ -288,16 +318,19 @@ tail -f storage/logs/security.log | grep "error"
 ## 🎓 Learning Path
 
 ### Beginner (Just need it working)
+
 1. [ERP_QUICKSTART.md](ERP_QUICKSTART.md) - 5 min
 2. Configure `.env` - 5 min
 3. Test with `php artisan erp:sync` - 5 min
 
 ### Intermediate (Want to understand)
+
 1. [ERP_SYNC_IMPLEMENTATION.md](ERP_SYNC_IMPLEMENTATION.md) - 15 min
 2. Review code files - 30 min
 3. [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md) sections 1-3 - 15 min
 
 ### Advanced (Want to customize)
+
 1. All documentation - 90 min
 2. Code review - 1 hour
 3. Security audit - 1 hour
@@ -308,6 +341,7 @@ tail -f storage/logs/security.log | grep "error"
 ## 🔗 Important Links
 
 ### Code Files
+
 - Backend Service: [app/Services/ERPSyncService.php](app/Services/ERPSyncService.php)
 - Console Command: [app/Console/Commands/SyncERPUsers.php](app/Console/Commands/SyncERPUsers.php)
 - Configuration: [config/erp.php](config/erp.php)
@@ -315,11 +349,13 @@ tail -f storage/logs/security.log | grep "error"
 - Frontend: [app/superadmin/users/page.tsx](../plnip-portal-frontend/app/superadmin/users/page.tsx)
 
 ### Log Files (Runtime)
+
 - Audit Log: `storage/logs/audit.log`
 - Security Log: `storage/logs/security.log`
 - General Log: `storage/logs/laravel.log`
 
 ### Configuration
+
 - Environment: `.env`
 - Example: `.env.example`
 - Config: `config/erp.php`
@@ -329,24 +365,28 @@ tail -f storage/logs/security.log | grep "error"
 ## 🚀 Next Steps
 
 ### Immediate (Today)
+
 - [ ] Read this index
 - [ ] Read [ERP_QUICKSTART.md](ERP_QUICKSTART.md)
 - [ ] Configure `.env`
 - [ ] Test sync
 
 ### Short Term (This Week)
+
 - [ ] Deploy to staging
 - [ ] Monitor logs
 - [ ] Get ERP API details
 - [ ] Plan go-live
 
 ### Medium Term (This Month)
+
 - [ ] Deploy to production
 - [ ] Enable JIT validation
 - [ ] Set up log monitoring
 - [ ] Archive old audit logs
 
 ### Long Term (Next Quarter)
+
 - [ ] Implement webhook (if ERP supports)
 - [ ] Add bulk import feature
 - [ ] Create dashboard for monitoring
@@ -356,15 +396,15 @@ tail -f storage/logs/security.log | grep "error"
 
 ## 📞 Support Resources
 
-| Question | Read |
-|----------|------|
-| "How do I set this up?" | [ERP_QUICKSTART.md](ERP_QUICKSTART.md) |
-| "What was implemented?" | [IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) |
-| "How do I configure it?" | [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md) |
-| "What API format?" | [ERP_API_SPECIFICATION.md](ERP_API_SPECIFICATION.md) |
-| "Technical details?" | [ERP_SYNC_IMPLEMENTATION.md](ERP_SYNC_IMPLEMENTATION.md) |
-| "Error help?" | [ERP_QUICKSTART.md](ERP_QUICKSTART.md) (Troubleshooting) |
-| "Full reference?" | [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md) |
+| Question                 | Read                                                     |
+| ------------------------ | -------------------------------------------------------- |
+| "How do I set this up?"  | [ERP_QUICKSTART.md](ERP_QUICKSTART.md)                   |
+| "What was implemented?"  | [IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) |
+| "How do I configure it?" | [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md)     |
+| "What API format?"       | [ERP_API_SPECIFICATION.md](ERP_API_SPECIFICATION.md)     |
+| "Technical details?"     | [ERP_SYNC_IMPLEMENTATION.md](ERP_SYNC_IMPLEMENTATION.md) |
+| "Error help?"            | [ERP_QUICKSTART.md](ERP_QUICKSTART.md) (Troubleshooting) |
+| "Full reference?"        | [ERP_INTEGRATION_GUIDE.md](ERP_INTEGRATION_GUIDE.md)     |
 
 ---
 

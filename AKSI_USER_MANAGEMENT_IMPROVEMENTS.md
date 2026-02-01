@@ -7,30 +7,30 @@ Sistem kelola user di Super Admin panel telah ditingkatkan dengan fitur-fitur be
 ### ✨ Fitur Baru / New Features
 
 1. **👁️ Lihat Detail (View Details)**
-   - Modal dialog menampilkan informasi lengkap user
-   - Menampilkan employee ID, unit, jabatan, access group (untuk ERP users)
-   - Audit history dengan 20 log terbaru
-   - Timestamp dan user yang melakukan perubahan
+    - Modal dialog menampilkan informasi lengkap user
+    - Menampilkan employee ID, unit, jabatan, access group (untuk ERP users)
+    - Audit history dengan 20 log terbaru
+    - Timestamp dan user yang melakukan perubahan
 
 2. **✏️ Edit User (Edit User)**
-   - Modal form untuk mengubah data user
-   - Field yang bisa diedit: Nama, Email, Unit, Jabatan, Status (Aktif/Nonaktif)
-   - Validation client-side dan server-side
-   - Success/error messages dengan auto-refresh user list
+    - Modal form untuk mengubah data user
+    - Field yang bisa diedit: Nama, Email, Unit, Jabatan, Status (Aktif/Nonaktif)
+    - Validation client-side dan server-side
+    - Success/error messages dengan auto-refresh user list
 
 3. **🗑️ Hapus User (Delete User)**
-   - **Hanya untuk manual users** (source = 'manual')
-   - Konfirmasi modal dengan peringatan
-   - Menampilkan nama user yang akan dihapus
-   - Audit logging untuk setiap delete action
-   - Catatan: ERP users tidak bisa dihapus (akan tersinkronisasi ulang)
+    - **Hanya untuk manual users** (source = 'manual')
+    - Konfirmasi modal dengan peringatan
+    - Menampilkan nama user yang akan dihapus
+    - Audit logging untuk setiap delete action
+    - Catatan: ERP users tidak bisa dihapus (akan tersinkronisasi ulang)
 
 4. **🛡️ Override Role (Override Role)**
-   - **Hanya untuk ERP users** (source = 'erp')
-   - Modal untuk mengubah role dari access_group default
-   - Wajib memberikan alasan (minimum 10 karakter) untuk audit trail
-   - Role options: Super Admin, Admin, Instructor, User
-   - Peringatan: Role akan berubah saat ERP sync berikutnya jika access_group berubah
+    - **Hanya untuk ERP users** (source = 'erp')
+    - Modal untuk mengubah role dari access_group default
+    - Wajib memberikan alasan (minimum 10 karakter) untuk audit trail
+    - Role options: Super Admin, Admin, Instructor, User
+    - Peringatan: Role akan berubah saat ERP sync berikutnya jika access_group berubah
 
 ---
 
@@ -39,6 +39,7 @@ Sistem kelola user di Super Admin panel telah ditingkatkan dengan fitur-fitur be
 ### Frontend Files (Next.js/React)
 
 #### 1. **UserDetailsModal.tsx** (NEW)
+
 ```
 File: app/superadmin/users/UserDetailsModal.tsx
 Type: React Component
@@ -52,6 +53,7 @@ Features:
 ```
 
 #### 2. **UserEditModal.tsx** (NEW)
+
 ```
 File: app/superadmin/users/UserEditModal.tsx
 Type: React Component
@@ -65,6 +67,7 @@ Features:
 ```
 
 #### 3. **UserDeleteModal.tsx** (NEW)
+
 ```
 File: app/superadmin/users/UserDeleteModal.tsx
 Type: React Component
@@ -79,6 +82,7 @@ Features:
 ```
 
 #### 4. **UserOverrideRoleModal.tsx** (NEW)
+
 ```
 File: app/superadmin/users/UserOverrideRoleModal.tsx
 Type: React Component
@@ -93,6 +97,7 @@ Features:
 ```
 
 #### 5. **page.tsx** (MODIFIED)
+
 ```
 File: app/superadmin/users/page.tsx
 Changes:
@@ -110,6 +115,7 @@ Changes:
 ### Backend Files (Laravel/PHP)
 
 #### Routes (Already Implemented)
+
 ```php
 Route::prefix('superadmin/users')->middleware('role:super-admin')->group(function () {
     Route::get('/', 'getAllUsers');                    // List users dengan filter
@@ -123,6 +129,7 @@ Route::prefix('superadmin/users')->middleware('role:super-admin')->group(functio
 ```
 
 #### Controllers
+
 ```
 File: app/Http/Controllers/API/UserController.php
 Methods already implemented:
@@ -139,6 +146,7 @@ Authorization checks:
 ```
 
 #### Services
+
 ```
 File: app/Services/UserService.php
 Methods already implemented:
@@ -154,6 +162,7 @@ Methods already implemented:
 ## 📊 Data Flow / Alur Data
 
 ### Lihat Detail
+
 ```
 User clicks "Lihat Detail"
     ↓
@@ -175,6 +184,7 @@ Modal displays:
 ```
 
 ### Edit User
+
 ```
 User clicks "Edit"
     ↓
@@ -204,6 +214,7 @@ User list refreshed
 ```
 
 ### Delete User
+
 ```
 User clicks "Hapus" (hanya visible untuk manual users)
     ↓
@@ -233,6 +244,7 @@ On success: Close modal + refresh list
 ```
 
 ### Override Role
+
 ```
 User clicks "Override Role" (hanya untuk ERP users)
     ↓
@@ -267,6 +279,7 @@ On success: Close modal + refresh list
 ## 🔐 Security & Permissions / Keamanan & Izin
 
 ### Authorization Rules
+
 ```
 Route: /superadmin/users/*
 Middleware: auth, role:super-admin
@@ -291,6 +304,7 @@ Override Role Modal:
 ```
 
 ### Audit Logging
+
 ```
 Setiap action dicatat:
 - User yang melakukan action (dari auth()->user())
@@ -309,6 +323,7 @@ Visible di: Detail Modal → Riwayat Audit section
 ## 🎨 UI/UX Improvements
 
 ### Modal Design
+
 ```
 - Consistent with design system
 - Dark mode support
@@ -320,6 +335,7 @@ Visible di: Detail Modal → Riwayat Audit section
 ```
 
 ### Dropdown Menu Actions
+
 ```
 All Users:
   ├── 👁️ Lihat Detail (untuk semua)
@@ -333,6 +349,7 @@ ERP Users (tambahan):
 ```
 
 ### Status Badges
+
 ```
 Role: bg-pln-100, text-pln-700
 Source: ERP (indigo) atau Manual (orange)
@@ -344,6 +361,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 ## ✅ Checklist Implementasi / Implementation Checklist
 
 ### Frontend
+
 - [x] UserDetailsModal.tsx created
 - [x] UserEditModal.tsx created
 - [x] UserDeleteModal.tsx created
@@ -354,6 +372,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 - [x] All modals responsive dan dark mode compatible
 
 ### Backend
+
 - [x] UserController.show() - sudah ada
 - [x] UserController.update() - sudah ada
 - [x] UserController.destroy() - sudah ada dengan authorization
@@ -364,6 +383,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 - [x] Audit logging - sudah ada di UserService
 
 ### Integration
+
 - [x] API endpoints integrated dengan modals
 - [x] Success/error message handling
 - [x] Auto-refresh user list after action
@@ -377,12 +397,14 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 ### Untuk Super Admin
 
 #### Lihat Detail User
+
 1. Buka Kelola Semua User
 2. Cari user yang ingin dilihat
 3. Click tombol menu (...) → "Lihat Detail"
 4. Modal akan tampil dengan informasi lengkap + audit history
 
 #### Edit User
+
 1. Click menu (...) → "Edit"
 2. Modal form terbuka dengan data current
 3. Ubah field yang diperlukan
@@ -390,6 +412,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 5. User list akan refresh otomatis
 
 #### Hapus User Manual
+
 1. Filter Source = "Manual"
 2. Click menu (...) → "Hapus"
 3. Konfirmasi dialog tampil
@@ -397,6 +420,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 5. User akan dihapus dan audit logged
 
 #### Override Role User ERP
+
 1. Filter Source = "ERP"
 2. Click menu (...) → "Override Role"
 3. Pilih role baru
@@ -409,6 +433,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 ## ⚠️ Important Notes / Catatan Penting
 
 ### Tentang Delete User
+
 ```
 ✅ Bisa dihapus:
 - User dengan source = 'manual'
@@ -420,6 +445,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 ```
 
 ### Tentang Override Role
+
 ```
 ⚠️ Penting:
 - Hanya berlaku untuk ERP users
@@ -431,6 +457,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 ```
 
 ### Tentang Edit User
+
 ```
 ✅ Bisa diedit:
 - Name, Email, Unit, Position, Status
@@ -447,6 +474,7 @@ Status: Aktif (emerald) atau Nonaktif (gray)
 ## 📈 Future Enhancements / Enhancement Masa Depan
 
 Possible improvements:
+
 - [ ] Bulk delete untuk manual users
 - [ ] Bulk edit untuk multiple users
 - [ ] Export user list ke CSV
@@ -515,6 +543,7 @@ Expected: Submit button disabled
 ## 📞 Support / Dukungan
 
 Untuk questions atau issues:
+
 - Check browser console untuk errors
 - Check backend logs di `storage/logs/laravel.log`
 - Verify super-admin permissions di roles/permissions table

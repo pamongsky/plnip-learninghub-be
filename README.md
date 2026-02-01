@@ -3,25 +3,31 @@
 ## 🌐 Pilih Bahasa / Choose Language
 
 ### 🇮🇩 UNTUK BAHASA INDONESIA
+
 Dokumentasi lengkap dalam bahasa Indonesia tersedia dengan file berikut:
 
 **Mulai dari sini:**
+
 - [`PANDUAN_CEPAT_ERP_INDONESIA.md`](PANDUAN_CEPAT_ERP_INDONESIA.md) - Setup dalam 5 menit
 - [`PANDUAN_INTEGRASI_ERP_INDONESIA.md`](PANDUAN_INTEGRASI_ERP_INDONESIA.md) - Referensi lengkap dengan troubleshooting
 
 **Navigasi lengkap:**
+
 - [`DOKUMENTASI_INDEX.md`](DOKUMENTASI_INDEX.md) - Master index dengan kedua bahasa
 
 ---
 
 ### 🇬🇧 FOR ENGLISH DOCUMENTATION
+
 Complete English documentation available with the following files:
 
 **Start here:**
+
 - [`ERP_QUICKSTART.md`](ERP_QUICKSTART.md) - 5 minute setup
 - [`ERP_INTEGRATION_GUIDE.md`](ERP_INTEGRATION_GUIDE.md) - Complete reference
 
 **Additional guides:**
+
 - [`ERP_SYNC_IMPLEMENTATION.md`](ERP_SYNC_IMPLEMENTATION.md) - Technical details
 - [`DEPLOYMENT_VERIFICATION_CHECKLIST.md`](DEPLOYMENT_VERIFICATION_CHECKLIST.md) - Deployment guide
 - [`ERP_API_SPECIFICATION.md`](ERP_API_SPECIFICATION.md) - API format for ERP team
@@ -29,21 +35,22 @@ Complete English documentation available with the following files:
 - [`ERP_DOCUMENTATION_INDEX.md`](ERP_DOCUMENTATION_INDEX.md) - Full navigation
 
 **Master navigation:**
+
 - [`DOKUMENTASI_INDEX.md`](DOKUMENTASI_INDEX.md) - Master index in both languages
 
 ---
 
 ## 📊 Ringkasan / Summary
 
-| Aspek / Aspect | Status | Detail |
-|---|---|---|
-| Backend Code / Kode Backend | ✅ Selesai | 4 file baru, 3 dimodifikasi |
-| Frontend UI / UI Frontend | ✅ Selesai | Tombol "Sync ERP" ditambahkan |
-| Indonesian Documentation | ✅ Selesai | 2 file panduan lengkap |
-| English Documentation | ✅ Selesai | 8 file panduan komprehensif |
-| Configuration / Konfigurasi | ✅ Selesai | 13 environment variables |
-| Security / Keamanan | ✅ Selesai | Authorization, audit, encryption |
-| Testing Guide | ✅ Selesai | Manual testing checklist included |
+| Aspek / Aspect              | Status     | Detail                            |
+| --------------------------- | ---------- | --------------------------------- |
+| Backend Code / Kode Backend | ✅ Selesai | 4 file baru, 3 dimodifikasi       |
+| Frontend UI / UI Frontend   | ✅ Selesai | Tombol "Sync ERP" ditambahkan     |
+| Indonesian Documentation    | ✅ Selesai | 2 file panduan lengkap            |
+| English Documentation       | ✅ Selesai | 8 file panduan komprehensif       |
+| Configuration / Konfigurasi | ✅ Selesai | 13 environment variables          |
+| Security / Keamanan         | ✅ Selesai | Authorization, audit, encryption  |
+| Testing Guide               | ✅ Selesai | Manual testing checklist included |
 
 ---
 
@@ -52,40 +59,44 @@ Complete English documentation available with the following files:
 ### Bahasa Indonesia / Indonesian
 
 1. **Baca Panduan**
-   ```
-   👉 PANDUAN_CEPAT_ERP_INDONESIA.md
-   ```
+
+    ```
+    👉 PANDUAN_CEPAT_ERP_INDONESIA.md
+    ```
 
 2. **Konfigurasi .env**
-   ```bash
-   ERP_ENABLED=false        # Mulai dengan disabled
-   ERP_API_URL=https://...  # Dari PLN IT
-   ERP_API_KEY=...          # Dari PLN IT
-   ```
+
+    ```bash
+    ERP_ENABLED=false        # Mulai dengan disabled
+    ERP_API_URL=https://...  # Dari PLN IT
+    ERP_API_KEY=...          # Dari PLN IT
+    ```
 
 3. **Test**
-   ```bash
-   php artisan erp:sync -v
-   ```
+    ```bash
+    php artisan erp:sync -v
+    ```
 
 ### English / Bahasa Inggris
 
 1. **Read Guide**
-   ```
-   👉 ERP_QUICKSTART.md
-   ```
+
+    ```
+    👉 ERP_QUICKSTART.md
+    ```
 
 2. **Configure .env**
-   ```bash
-   ERP_ENABLED=false        # Start with disabled
-   ERP_API_URL=https://...  # From PLN IT
-   ERP_API_KEY=...          # From PLN IT
-   ```
+
+    ```bash
+    ERP_ENABLED=false        # Start with disabled
+    ERP_API_URL=https://...  # From PLN IT
+    ERP_API_KEY=...          # From PLN IT
+    ```
 
 3. **Test**
-   ```bash
-   php artisan erp:sync -v
-   ```
+    ```bash
+    php artisan erp:sync -v
+    ```
 
 ---
 
@@ -141,23 +152,29 @@ Dokumentasi ERP Integration / ERP Integration Documentation
 ### Jika Anda... / If you...
 
 **Ingin setup cepat dalam 5 menit / Want quick setup in 5 minutes:**
+
 - 🇮🇩 → [`PANDUAN_CEPAT_ERP_INDONESIA.md`](PANDUAN_CEPAT_ERP_INDONESIA.md)
 - 🇬🇧 → [`ERP_QUICKSTART.md`](ERP_QUICKSTART.md)
 
 **Butuh referensi lengkap / Need complete reference:**
+
 - 🇮🇩 → [`PANDUAN_INTEGRASI_ERP_INDONESIA.md`](PANDUAN_INTEGRASI_ERP_INDONESIA.md)
 - 🇬🇧 → [`ERP_INTEGRATION_GUIDE.md`](ERP_INTEGRATION_GUIDE.md)
 
 **Mencari detail teknis / Looking for technical details:**
+
 - 🇬🇧 → [`ERP_SYNC_IMPLEMENTATION.md`](ERP_SYNC_IMPLEMENTATION.md)
 
 **Perlu deploy ke production / Need to deploy to production:**
+
 - 🇬🇧 → [`DEPLOYMENT_VERIFICATION_CHECKLIST.md`](DEPLOYMENT_VERIFICATION_CHECKLIST.md)
 
 **Tim ERP butuh format API / ERP team needs API format:**
+
 - 🇬🇧 → [`ERP_API_SPECIFICATION.md`](ERP_API_SPECIFICATION.md)
 
 **Kebingungan file mana dibaca / Confused which file to read:**
+
 - 🌐 → [`DOKUMENTASI_INDEX.md`](DOKUMENTASI_INDEX.md)
 
 ---
@@ -165,6 +182,7 @@ Dokumentasi ERP Integration / ERP Integration Documentation
 ## ✨ Fitur Utama / Key Features
 
 ### Core Features
+
 - ✅ **Sinkronisasi Terjadwal / Scheduled Sync** - Daily automatic user sync
 - ✅ **Sinkronisasi Manual / Manual Sync** - Via UI, API, or CLI
 - ✅ **Auto User Creation** - Create users from ERP automatically
@@ -173,6 +191,7 @@ Dokumentasi ERP Integration / ERP Integration Documentation
 - ✅ **Comprehensive Audit Logging** - All changes tracked
 
 ### Security Features
+
 - ✅ **Super-admin Authorization** - Only super-admin can trigger
 - ✅ **Bearer Token Auth** - Secure ERP API authentication
 - ✅ **Audit Trail** - Complete change history with IP logging
@@ -183,14 +202,14 @@ Dokumentasi ERP Integration / ERP Integration Documentation
 
 ## 📞 Butuh Bantuan? / Need Help?
 
-| Pertanyaan / Question | Baca / Read |
-|---|---|
-| Bagaimana memulai? / How to start? | PANDUAN_CEPAT_ERP_INDONESIA.md atau ERP_QUICKSTART.md |
-| Ada error apa? / What error? | PANDUAN_CEPAT_ERP_INDONESIA.md (Bagian Common Issues) |
-| Cara deploy? / How to deploy? | DEPLOYMENT_VERIFICATION_CHECKLIST.md |
-| Format API ERP? / API format? | ERP_API_SPECIFICATION.md |
-| Detail teknis? / Technical details? | ERP_SYNC_IMPLEMENTATION.md |
-| File mana dibaca? / Which file? | DOKUMENTASI_INDEX.md |
+| Pertanyaan / Question               | Baca / Read                                           |
+| ----------------------------------- | ----------------------------------------------------- |
+| Bagaimana memulai? / How to start?  | PANDUAN_CEPAT_ERP_INDONESIA.md atau ERP_QUICKSTART.md |
+| Ada error apa? / What error?        | PANDUAN_CEPAT_ERP_INDONESIA.md (Bagian Common Issues) |
+| Cara deploy? / How to deploy?       | DEPLOYMENT_VERIFICATION_CHECKLIST.md                  |
+| Format API ERP? / API format?       | ERP_API_SPECIFICATION.md                              |
+| Detail teknis? / Technical details? | ERP_SYNC_IMPLEMENTATION.md                            |
+| File mana dibaca? / Which file?     | DOKUMENTASI_INDEX.md                                  |
 
 ---
 
@@ -209,7 +228,7 @@ Dokumentasi ERP Integration / ERP Integration Documentation
 
 ```
 ✅ Backend Services:          Complete
-✅ Console Commands:          Complete  
+✅ Console Commands:          Complete
 ✅ Configuration:             Complete
 ✅ Controller Endpoints:       Complete
 ✅ Frontend UI:               Complete
@@ -229,10 +248,12 @@ Date: Januari / January 2024
 ## 📖 Versi Dokumentasi / Documentation Versions
 
 **Indonesian / Bahasa Indonesia:**
+
 - PANDUAN_CEPAT_ERP_INDONESIA.md (6.3 KB)
 - PANDUAN_INTEGRASI_ERP_INDONESIA.md (12 KB)
 
 **English:**
+
 - ERP_QUICKSTART.md (6.3 KB)
 - ERP_INTEGRATION_GUIDE.md (10.8 KB)
 - ERP_SYNC_IMPLEMENTATION.md (11.3 KB)
@@ -243,6 +264,7 @@ Date: Januari / January 2024
 - FILE_MANIFEST.md (13.5 KB)
 
 **Bilingual / Campuran:**
+
 - DOKUMENTASI_INDEX.md (Master index)
 - START_HERE.txt (Visual overview)
 

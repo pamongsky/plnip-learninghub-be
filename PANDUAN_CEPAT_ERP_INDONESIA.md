@@ -1,6 +1,7 @@
 # 🚀 PANDUAN CEPAT INTEGRASI ERP - MULAI DALAM 5 MENIT
 
 ## Langkah 1: Konfigurasi Lingkungan (1 menit)
+
 Buka file `.env` di project root:
 
 ```bash
@@ -16,7 +17,9 @@ ERP_SYNC_SCHEDULE=02:00
 ```
 
 ## Langkah 2: Buat User Secara Manual (Development Phase)
+
 Di panel super admin:
+
 1. Buka "Kelola Semua User"
 2. Klik "Tambah User"
 3. Isi form: nama, email, employee_id, role, dll
@@ -24,32 +27,39 @@ Di panel super admin:
 5. User manual **tidak pernah** ditimpa oleh ERP
 
 ## Langkah 3: Aktifkan ERP Saat Siap (Production)
+
 ```bash
 ERP_ENABLED=true
 ```
 
 Sekarang:
+
 - Sync otomatis berjalan setiap hari jam 2:00 pagi
 - User dari ERP dibuat/diperbarui otomatis
 - User manual dari dev tetap aman
 - Semua perubahan dicatat dalam audit log
 
 ## Langkah 4: Jalankan Sync Manual Kapan Saja
+
 Di panel super admin → tombol "Sync ERP"
 
 Atau via API:
+
 ```bash
 curl -X POST http://localhost:8000/api/superadmin/sync-erp \
   -H "Authorization: Bearer TOKEN_ANDA"
 ```
 
 Atau via CLI:
+
 ```bash
 php artisan erp:sync -v
 ```
 
 ## Langkah 5: Monitor Hasil
+
 Periksa log:
+
 ```bash
 # Operasi sync terbaru
 tail -f storage/logs/audit.log | grep "ERP"
@@ -76,6 +86,7 @@ tail -f storage/logs/security.log | grep "error"
 ## 🔍 Testing Integrasi
 
 ### Test Cepat via Command Line
+
 ```bash
 # Cek konfigurasi
 php artisan tinker
@@ -87,6 +98,7 @@ exit
 ```
 
 ### Jalankan Sync dengan Output Detail
+
 ```bash
 php artisan erp:sync -v
 
@@ -100,6 +112,7 @@ php artisan erp:sync -v
 ```
 
 ### Cek Database
+
 ```bash
 php artisan tinker
 
@@ -122,12 +135,14 @@ exit
 ## ⚠️ Masalah Umum & Solusi
 
 ### "Error API: 401"
+
 ```bash
 # API key salah atau expired
 # Solusi: Dapatkan key baru dari PLN IT, update ERP_API_KEY di .env
 ```
 
 ### "Connection timeout"
+
 ```bash
 # Server ERP down atau tidak terjangkau
 # Solusi: Cek koneksi VPN, aturan firewall
@@ -135,6 +150,7 @@ exit
 ```
 
 ### "Tidak ada data employee dari ERP"
+
 ```bash
 # API ERP mengembalikan response kosong
 # Cek: curl -H "Authorization: Bearer KEY" https://url-erp
@@ -142,6 +158,7 @@ exit
 ```
 
 ### User tidak dibuat setelah sync
+
 ```bash
 # Cek apakah ERP enabled
 echo $ERP_ENABLED  # Harus output: true
@@ -154,6 +171,7 @@ php artisan erp:sync -v  # Menampilkan detail
 ```
 
 ### Scheduled sync tidak berjalan
+
 ```bash
 # Cek apakah scheduler aktif
 ps aux | grep schedule:run
@@ -193,11 +211,13 @@ Authorization: Bearer API_KEY_ANDA
 ```
 
 **Field yang Wajib:**
+
 - `employee_id` (string, unik)
 - `name` (string)
 - `email` (string)
 
 **Field Opsional:**
+
 - `phone`, `department`, `position`
 - `access_group` (maps to role)
 - `is_active` (boolean)
@@ -208,12 +228,12 @@ Authorization: Bearer API_KEY_ANDA
 
 Field `access_group` dari ERP harus salah satu:
 
-| Nilai ERP | Role Portal | Permissions |
-|---|---|---|
-| `SUPERADMIN` | super-admin | Full access |
-| `ADMIN_UNIT` | admin | Department management |
-| `INSTRUCTOR` | instructor | Class management |
-| `USER` | user | Learning only |
+| Nilai ERP    | Role Portal | Permissions           |
+| ------------ | ----------- | --------------------- |
+| `SUPERADMIN` | super-admin | Full access           |
+| `ADMIN_UNIT` | admin       | Department management |
+| `INSTRUCTOR` | instructor  | Class management      |
+| `USER`       | user        | Learning only         |
 
 **Contoh:** Jika ERP mengirim `access_group: "INSTRUCTOR"`, user otomatis dapat role `instructor`.
 
@@ -232,22 +252,23 @@ Field `access_group` dari ERP harus salah satu:
 ## 📞 Dapatkan Bantuan
 
 1. **Periksa log terlebih dahulu:**
-   ```bash
-   tail -f storage/logs/security.log
-   tail -f storage/logs/audit.log
-   ```
+
+    ```bash
+    tail -f storage/logs/security.log
+    tail -f storage/logs/audit.log
+    ```
 
 2. **Baca panduan lengkap:**
-   - Lihat `ERP_INTEGRATION_GUIDE.md` di project root (Bahasa Inggris)
+    - Lihat `ERP_INTEGRATION_GUIDE.md` di project root (Bahasa Inggris)
 
 3. **Detail implementasi:**
-   - Lihat `ERP_SYNC_IMPLEMENTATION.md` di project root (Bahasa Inggris)
+    - Lihat `ERP_SYNC_IMPLEMENTATION.md` di project root (Bahasa Inggris)
 
 4. **Hubungi tim PLN IT:**
-   - Dapatkan kredensial ERP API
-   - Verifikasi endpoint ERP
-   - Konfirmasi struktur data employee
-   - Nilai access_group yang diperlukan
+    - Dapatkan kredensial ERP API
+    - Verifikasi endpoint ERP
+    - Konfirmasi struktur data employee
+    - Nilai access_group yang diperlukan
 
 ---
 
@@ -276,6 +297,7 @@ php artisan tinker
 ## ✅ Anda Siap!
 
 Jika Anda dapat:
+
 1. ✅ Lihat user ERP di database
 2. ✅ Lihat tombol "Sync ERP" di UI
 3. ✅ Periksa audit log untuk operasi
