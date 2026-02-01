@@ -22,6 +22,11 @@ class User extends Authenticatable
         'position',
         'avatar',
         'is_active',
+        'source',
+        'access_group',
+        'role_override',
+        'synced_at',
+        'role_changed_at',
     ];
 
     protected $hidden = [
@@ -37,6 +42,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'synced_at' => 'datetime',
+            'role_changed_at' => 'datetime',
         ];
     }
 
@@ -47,6 +54,40 @@ class User extends Authenticatable
     public function getRoleAttribute(): ?string
     {
         return $this->roles->first()?->name;
+    }
+
+    /**
+     * Get effective role: use role_override if exists, else resolve from access_group
+     */
+    public function getEffectiveRole(): ?string
+    {
+        // If role_override is set, use it
+        if ($this->role_override) {
+            return $this->role_override;
+        }
+
+        // Otherwise resolve from access_group
+        if ($this->access_group) {
+            return $this->mapAccessGroupToRole($this->access_group);
+        }
+
+        // Fallback to first assigned role
+        return $this->roles->first()?->name;
+    }
+
+    /**
+     * Map access_group from ERP to portal role
+     */
+    private function mapAccessGroupToRole(string $accessGroup): ?string
+    {
+        $mapping = [
+            'SUPERADMIN' => 'super-admin',
+            'ADMIN_UNIT' => 'admin',
+            'INSTRUCTOR' => 'instructor',
+            'USER' => 'user',
+        ];
+
+        return $mapping[strtoupper($accessGroup)] ?? 'user';
     }
 
     /**

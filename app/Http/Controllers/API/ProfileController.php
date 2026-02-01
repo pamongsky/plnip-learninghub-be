@@ -137,7 +137,13 @@ class ProfileController extends Controller
                 'success' => true,
                 'message' => 'Avatar uploaded successfully',
                 'data' => [
-                    'avatar' => asset('storage/' . $path)
+                    'avatar' => asset('storage/' . $path),
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'avatar' => asset('storage/' . $path),
+                    ]
                 ]
             ]);
         } catch (\Exception $e) {

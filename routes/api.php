@@ -38,9 +38,41 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
 
     // Dashboard
-    Route::get('/users', [\App\Http\Controllers\Api\UserController::class, 'index']);
+    Route::get('/users', [\App\Http\Controllers\API\UserController::class, 'index']);
     Route::get('/dashboard/employee', [DashboardController::class, 'employeeDashboard']);
+    Route::get('/dashboard/instructor', [DashboardController::class, 'instructorDashboard']);
     Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
+
+    // =====================
+    // USER MANAGEMENT (Super Admin)
+    // =====================
+    Route::prefix('superadmin/users')->middleware('role:super-admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\UserController::class, 'getAllUsers']);
+        Route::post('/', [\App\Http\Controllers\API\UserController::class, 'store']);
+        Route::get('/{user}', [\App\Http\Controllers\API\UserController::class, 'show']);
+        Route::put('/{user}', [\App\Http\Controllers\API\UserController::class, 'update']);
+        Route::delete('/{user}', [\App\Http\Controllers\API\UserController::class, 'destroy']);
+        Route::post('/{user}/override-role', [\App\Http\Controllers\API\UserController::class, 'overrideRole']);
+        Route::get('/{user}/audit-history', [\App\Http\Controllers\API\UserController::class, 'auditHistory']);
+    });
+
+    // =====================
+    // ROLES & PERMISSIONS (Super Admin)
+    // =====================
+    Route::prefix('superadmin/roles')->middleware('role:super-admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\RoleController::class, 'getAllRoles']);
+        Route::get('/permissions/all', [\App\Http\Controllers\API\RoleController::class, 'getAllPermissions']);
+        Route::post('/', [\App\Http\Controllers\API\RoleController::class, 'createRole']);
+        Route::get('/{role}', [\App\Http\Controllers\API\RoleController::class, 'showRole']);
+        Route::put('/{role}/permissions', [\App\Http\Controllers\API\RoleController::class, 'updateRolePermissions']);
+        Route::delete('/{role}', [\App\Http\Controllers\API\RoleController::class, 'deleteRole']);
+    });
+
+    // =====================
+    // ERP SYNC (Super Admin)
+    // =====================
+    Route::post('/superadmin/sync-erp', [\App\Http\Controllers\API\UserController::class, 'triggerERPSync'])
+        ->middleware('role:super-admin');
 
     // Announcements
     Route::get('/announcements', [AnnouncementController::class, 'index']);
@@ -162,6 +194,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('courses')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\CourseController::class, 'index']);
         Route::post('/sync', [\App\Http\Controllers\Api\CourseController::class, 'sync']);
+        Route::get('/my', [\App\Http\Controllers\API\CourseController::class, 'myCourses']);
         Route::get('/{id}', [\App\Http\Controllers\Api\CourseController::class, 'show']);
         Route::put('/{id}', [\App\Http\Controllers\Api\CourseController::class, 'update']);
         Route::post('/{id}/enroll', [\App\Http\Controllers\Api\CourseController::class, 'enrollUser']);
@@ -172,4 +205,13 @@ Route::middleware('auth:sanctum')->group(function () {
     // MOODLE SSO ROUTE
     // =====================
     Route::post('/moodle/login-url', [\App\Http\Controllers\API\MoodleAuthController::class, 'getLoginUrl']);
+
+    // =====================
+    // AI CHAT ROUTE
+    // =====================
+    Route::get('/chat/sessions', [\App\Http\Controllers\API\ChatController::class, 'getSessions']);
+    Route::put('/chat/sessions/{id}', [\App\Http\Controllers\API\ChatController::class, 'renameSession']);
+    Route::delete('/chat/sessions/{id}', [\App\Http\Controllers\API\ChatController::class, 'deleteSession']);
+    Route::get('/chat/history', [\App\Http\Controllers\API\ChatController::class, 'history']);
+    Route::post('/chat', [\App\Http\Controllers\API\ChatController::class, 'chat']);
 });

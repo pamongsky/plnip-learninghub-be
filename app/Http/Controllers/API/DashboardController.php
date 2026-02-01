@@ -90,6 +90,114 @@ class DashboardController extends Controller
         ], 200);
     }
 
+    public function instructorDashboard(Request $request)
+    {
+        $user = $request->user();
+
+        // Latest announcements
+        $announcements = Announcement::where('is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('published_at')
+                  ->orWhere('published_at', '<=', now());
+            })
+            ->with('creator:id,name,department,position')
+            ->orderBy('priority', 'desc')
+            ->orderBy('published_at', 'desc')
+            ->limit(5)
+            ->get();
+
+        // Get instructor's courses from Moodle
+        $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
+        
+        try {
+            // First, get user ID from Moodle
+            $moodleUser = DB::connection('moodle')
+                ->table('user')
+                ->where('email', $user->email)
+                ->first();
+
+            if (!$moodleUser) {
+                // User not found in Moodle, return empty courses
+                $courses = collect([]);
+            } else {
+                // Get courses where user is enrolled
+                $courses = DB::connection('moodle')
+                    ->table('course as c')
+                    ->join('enrol as e', 'c.id', '=', 'e.courseid')
+                    ->join('user_enrolments as ue', 'e.id', '=', 'ue.enrolid')
+                    ->where('ue.userid', $moodleUser->id)
+                    ->where('c.id', '!=', 1) // Exclude site home course
+                    ->select(
+                        'c.id',
+                        'c.fullname as title',
+                        'c.shortname',
+                        'c.summary as description',
+                        'c.startdate',
+                        'c.enddate'
+                    )
+                    ->distinct()
+                    ->get();
+            }
+        } catch (\Exception $e) {
+            \Log::error('Moodle connection error: ' . $e->getMessage());
+            $courses = collect([]);
+        }
+
+        // Map courses and calculate stats
+        $mapCourses = $courses->map(function ($course) use ($moodleBase) {
+            $now = now()->timestamp;
+            $status = 'active';
+            
+            if ($course->startdate > $now) {
+                $status = 'upcoming';
+            } elseif ($course->enddate > 0 && $course->enddate < $now) {
+                $status = 'completed';
+            }
+
+            // Get participant count from Moodle
+            try {
+                $participantCount = DB::connection('moodle')
+                    ->table('user_enrolments as ue')
+                    ->join('enrol as e', 'ue.enrolid', '=', 'e.id')
+                    ->where('e.courseid', $course->id)
+                    ->count();
+            } catch (\Exception $e) {
+                $participantCount = 0;
+            }
+
+            return [
+                'id' => $course->id,
+                'title' => $course->title,
+                'short_name' => $course->shortname,
+                'description' => strip_tags($course->description ?? ''),
+                'participants' => $participantCount,
+                'schedule' => $course->shortname,
+                'status' => $status,
+                'progress' => $status === 'completed' ? 100 : ($status === 'active' ? 50 : 0),
+                'moodle_url' => "{$moodleBase}/course/view.php?id={$course->id}",
+            ];
+        });
+
+        // Calculate statistics
+        $activeClasses = $mapCourses->where('status', 'active')->count();
+        $totalParticipants = $mapCourses->sum('participants');
+        $completedClasses = $mapCourses->where('status', 'completed')->count();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'stats' => [
+                    'active_classes' => $activeClasses,
+                    'total_participants' => $totalParticipants,
+                    'completed_classes' => $completedClasses,
+                    'average_attendance' => 87, // Placeholder
+                ],
+                'announcements' => $announcements,
+                'classes' => $mapCourses->values(),
+            ],
+        ], 200);
+    }
+
     public function stats(Request $request)
     {
         // Overall platform statistics (for super-admin/admin)
