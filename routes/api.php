@@ -57,15 +57,28 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // =====================
-    // ROLES & PERMISSIONS (Super Admin & Admin)
+    // ROLES & PERMISSIONS (Super Admin Only)
     // =====================
-    Route::prefix('superadmin/roles')->middleware('role:super-admin,admin')->group(function () {
+    Route::prefix('superadmin/roles')->middleware('role:super-admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\API\RoleController::class, 'getAllRoles']);
         Route::get('/permissions/all', [\App\Http\Controllers\API\RoleController::class, 'getAllPermissions']);
         Route::post('/', [\App\Http\Controllers\API\RoleController::class, 'createRole']);
         Route::get('/{role}', [\App\Http\Controllers\API\RoleController::class, 'showRole']);
         Route::put('/{role}/permissions', [\App\Http\Controllers\API\RoleController::class, 'updateRolePermissions']);
         Route::delete('/{role}', [\App\Http\Controllers\API\RoleController::class, 'deleteRole']);
+    });
+
+    // PERMISSION MANAGEMENT (Super Admin Only - Real-time CRUD)
+    // =====================
+    Route::prefix('superadmin/permissions')->middleware('role:super-admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\PermissionController::class, 'index']); // List all
+        Route::post('/', [\App\Http\Controllers\API\PermissionController::class, 'store']); // Create one
+        Route::post('/bulk', [\App\Http\Controllers\API\PermissionController::class, 'bulkStore']); // Create many
+        Route::post('/sync-standard', [\App\Http\Controllers\API\PermissionController::class, 'syncStandard']); // Sync standard permissions
+        Route::get('/stats', [\App\Http\Controllers\API\PermissionController::class, 'stats']); // Stats
+        Route::get('/{id}', [\App\Http\Controllers\API\PermissionController::class, 'show']); // View one
+        Route::put('/{id}', [\App\Http\Controllers\API\PermissionController::class, 'update']); // Update
+        Route::delete('/{id}', [\App\Http\Controllers\API\PermissionController::class, 'destroy']); // Delete
     });
 
     // =====================
@@ -78,6 +91,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/announcements', [AnnouncementController::class, 'index']);
     Route::get('/announcements/latest', [AnnouncementController::class, 'latest']);
     Route::get('/announcements/{id}', [AnnouncementController::class, 'show']);
+
+    // =====================
+    // ANNOUNCEMENTS - Super Admin Only
+    // =====================
+    Route::prefix('superadmin/announcements')->middleware('role:super-admin')->group(function () {
+        Route::get('/', [AnnouncementController::class, 'getAllAnnouncements']); // Tracking semua announcements
+        Route::post('/', [AnnouncementController::class, 'createGlobalAnnouncement']); // Create global announcement
+        Route::get('/tracking', [AnnouncementController::class, 'getAnnouncementTracking']); // Analytics
+    });
 
     // User Profile
     Route::get('/profile', [ProfileController::class, 'show']);
@@ -114,11 +136,11 @@ Route::middleware('auth:sanctum')->group(function () {
         //     Route::get('/tickets/{id}', [SupportTicketController::class, 'show']);
         // });
         // The issue is definitely order.
-        
+
         Route::get('/tickets/stats', [SupportTicketController::class, 'getStats']);
         Route::get('/tickets/{id}', [SupportTicketController::class, 'show']);
         Route::get('/tickets', [SupportTicketController::class, 'index']); // Index should be accessible too.
-        
+
         // Let's rewrite the block clearly.
         Route::get('/tickets/stats', [SupportTicketController::class, 'getStats']);
         Route::get('/tickets', [SupportTicketController::class, 'index']);
@@ -207,11 +229,30 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/moodle/login-url', [\App\Http\Controllers\API\MoodleAuthController::class, 'getLoginUrl']);
 
     // =====================
-    // AI CHAT ROUTE
+    // AI CHAT & FAQ ROUTES
     // =====================
     Route::get('/chat/sessions', [\App\Http\Controllers\API\ChatController::class, 'getSessions']);
     Route::put('/chat/sessions/{id}', [\App\Http\Controllers\API\ChatController::class, 'renameSession']);
     Route::delete('/chat/sessions/{id}', [\App\Http\Controllers\API\ChatController::class, 'deleteSession']);
     Route::get('/chat/history', [\App\Http\Controllers\API\ChatController::class, 'history']);
     Route::post('/chat', [\App\Http\Controllers\API\ChatController::class, 'chat']);
+    Route::post('/chat/faq-feedback', [\App\Http\Controllers\API\ChatController::class, 'faqFeedback']);
+
+    // =====================
+    // FAQ MANAGEMENT (Admin/Super Admin)
+    // =====================
+    Route::prefix('admin/ai-faqs')->middleware('role:admin|super-admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\AiFaqController::class, 'index']);
+        Route::get('/statistics', [\App\Http\Controllers\API\AiFaqController::class, 'statistics']);
+        Route::post('/', [\App\Http\Controllers\API\AiFaqController::class, 'store']);
+        Route::get('/{id}', [\App\Http\Controllers\API\AiFaqController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\API\AiFaqController::class, 'update']);
+        Route::delete('/{id}', [\App\Http\Controllers\API\AiFaqController::class, 'destroy']);
+        Route::post('/bulk-toggle', [\App\Http\Controllers\API\AiFaqController::class, 'bulkToggle']);
+        
+        // FAQ Suggestions (Auto-Learn)
+        Route::get('/suggestions/list', [\App\Http\Controllers\API\AiFaqController::class, 'suggestions']);
+        Route::post('/suggestions/{id}/approve', [\App\Http\Controllers\API\AiFaqController::class, 'approveSuggestion']);
+        Route::post('/suggestions/{id}/reject', [\App\Http\Controllers\API\AiFaqController::class, 'rejectSuggestion']);
+    });
 });

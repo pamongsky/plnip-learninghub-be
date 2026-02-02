@@ -96,25 +96,33 @@ class RoleController extends \App\Http\Controllers\Controller
      */
     public function createRole(Request $request): JsonResponse
     {
-        $user = $request->user();
-        if (!$user || (!$user->hasRole('super-admin') && !$user->hasRole('admin'))) {
+        if (!$request->user() || !$request->user()->hasRole('super-admin')) {
             return response()->json([
-                'message' => 'Hanya super admin dan admin yang bisa create role'
+                'message' => 'Hanya super admin yang bisa create role'
             ], 403);
         }
 
         $validated = $request->validate([
             'name' => 'required|string|unique:roles|max:255',
+            'display_name' => 'required|string|max:255',
             'permissions' => 'sometimes|array',
             'permissions.*' => 'string|exists:permissions,name',
         ]);
+
+        // Only allow creating "admin" type roles (contain "admin" in name)
+        // e.g., "admin", "admin-unit", "admin-divisi", "content-admin"
+        if (!str_contains(strtolower($validated['name']), 'admin')) {
+            return response()->json([
+                'message' => 'Hanya bisa membuat role dengan tipe "admin". Contoh: admin-unit, admin-divisi, content-admin'
+            ], 422);
+        }
 
         try {
             DB::beginTransaction();
 
             $role = Role::create([
                 'name' => $validated['name'],
-                'guard_name' => 'api',
+                'guard_name' => 'web',
             ]);
 
             // Assign permissions
@@ -129,6 +137,7 @@ class RoleController extends \App\Http\Controllers\Controller
                 'role' => [
                     'id' => $role->id,
                     'name' => $role->name,
+                    'display_name' => $validated['display_name'],
                     'permissions' => $role->permissions->pluck('name')->toArray(),
                 ]
             ], 201);
