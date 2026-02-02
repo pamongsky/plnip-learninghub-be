@@ -57,9 +57,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // =====================
-    // ROLES & PERMISSIONS (Super Admin)
+    // ROLES & PERMISSIONS (Super Admin & Admin)
     // =====================
-    Route::prefix('superadmin/roles')->middleware('role:super-admin')->group(function () {
+    Route::prefix('superadmin/roles')->middleware('role:super-admin,admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\API\RoleController::class, 'getAllRoles']);
         Route::get('/permissions/all', [\App\Http\Controllers\API\RoleController::class, 'getAllPermissions']);
         Route::post('/', [\App\Http\Controllers\API\RoleController::class, 'createRole']);

@@ -96,9 +96,10 @@ class RoleController extends \App\Http\Controllers\Controller
      */
     public function createRole(Request $request): JsonResponse
     {
-        if (!$request->user() || !$request->user()->hasRole('super-admin')) {
+        $user = $request->user();
+        if (!$user || (!$user->hasRole('super-admin') && !$user->hasRole('admin'))) {
             return response()->json([
-                'message' => 'Hanya super admin yang bisa create role'
+                'message' => 'Hanya super admin dan admin yang bisa create role'
             ], 403);
         }
 
