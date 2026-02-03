@@ -18,7 +18,7 @@ return new class extends Migration
             $table->text('message');
             $table->enum('role', ['user', 'assistant']);
             $table->timestamps();
-            
+
             $table->index(['conversation_id', 'created_at']);
         });
     }
