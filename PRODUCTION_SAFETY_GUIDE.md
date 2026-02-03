@@ -1,17 +1,20 @@
 # PRODUCTION SAFETY GUIDE
+
 # Panduan Keamanan untuk Mencegah Data Loss
 
 ## 🚨 ATURAN EMAS - WAJIB DIIKUTI
 
 ### 1. JANGAN PERNAH gunakan perintah ini di production:
+
 ```bash
 ❌ php artisan migrate:fresh    # DELETES ALL DATA
-❌ php artisan migrate:refresh  # DELETES ALL DATA  
+❌ php artisan migrate:refresh  # DELETES ALL DATA
 ❌ php artisan db:wipe          # DELETES ALL DATA
 ❌ DROP TABLE ...               # Sangat berbahaya
 ```
 
 ### 2. SELALU gunakan perintah aman:
+
 ```bash
 ✅ php artisan migrate           # Hanya tambah table baru (SAFE)
 ✅ php artisan migrate:rollback  # Undo migration terakhir
@@ -23,22 +26,27 @@
 ## 🔒 PROTEKSI OTOMATIS YANG SUDAH DIIMPLEMENTASIKAN
 
 ### 1. Environment Protection
+
 File: `app/Providers/ProductionSafetyProvider.php`
 
 **Apa yang dilakukan:**
+
 - Otomatis BLOCK perintah berbahaya di production
 - migrate:fresh akan GAGAL jika APP_ENV=production
 - Muncul warning merah jika coba jalankan
 
 **Cara mengecek:**
+
 ```bash
 php artisan env        # Cek environment sekarang
 ```
 
 ### 2. Safe Migration Command
+
 File: `app/Console/Commands/SafeMigrate.php`
 
 **Cara pakai:**
+
 ```bash
 # Migration biasa (SAFE)
 php artisan migrate:safe
@@ -48,6 +56,7 @@ php artisan migrate:safe --fresh
 ```
 
 **Fitur:**
+
 - Konfirmasi ganda untuk operasi berbahaya
 - Cek jumlah user sebelum delete
 - Block otomatis di production
@@ -59,6 +68,7 @@ php artisan migrate:safe --fresh
 ### Setup Backup Harian
 
 #### Windows (Task Scheduler):
+
 ```powershell
 # 1. Buka Task Scheduler
 # 2. Create Basic Task
@@ -75,6 +85,7 @@ php artisan migrate:safe --fresh
 ```
 
 #### Linux/Oracle Server (Cron):
+
 ```bash
 # Edit crontab
 crontab -e
@@ -84,6 +95,7 @@ crontab -e
 ```
 
 ### Manual Backup (Sebelum operasi berisiko):
+
 ```bash
 # Full backup
 expdp system/password@ORCL DIRECTORY=DATA_PUMP_DIR DUMPFILE=before_migration.dmp FULL=Y
@@ -94,6 +106,7 @@ expdp system/password@ORCL DIRECTORY=DATA_PUMP_DIR DUMPFILE=critical_backup.dmp 
 ```
 
 ### Restore dari Backup:
+
 ```bash
 # Full restore
 impdp system/password@ORCL DIRECTORY=DATA_PUMP_DIR DUMPFILE=backup.dmp FULL=Y
@@ -140,6 +153,7 @@ Sebelum menjalankan migration di production, WAJIB cek:
 ## 🛡️ ADDITIONAL SAFEGUARDS
 
 ### 1. Enable Oracle Flashback Database
+
 ```sql
 -- Login as SYSDBA
 sqlplus / as sysdba
@@ -155,6 +169,7 @@ SELECT FLASHBACK_ON FROM V$DATABASE;
 ```
 
 ### 2. Create Restore Points (Sebelum operasi besar)
+
 ```sql
 -- Create restore point
 CREATE RESTORE POINT before_migration GUARANTEE FLASHBACK DATABASE;
@@ -170,6 +185,7 @@ DROP RESTORE POINT before_migration;
 ```
 
 ### 3. Increase Undo Retention
+
 ```sql
 -- Set undo retention to 24 hours (for flashback query)
 ALTER SYSTEM SET UNDO_RETENTION=86400;
@@ -230,12 +246,14 @@ Jika terjadi incident:
 ## 📚 TRAINING & DOCUMENTATION
 
 ### Mandatory Reading untuk IT Team:
+
 - [ ] Production Safety Guide (dokumen ini)
 - [ ] Oracle Backup & Recovery Guide
 - [ ] Laravel Migration Best Practices
 - [ ] Incident Response Procedure
 
 ### Regular Training:
+
 - Monthly: Backup restoration drill
 - Quarterly: Incident simulation
 - Annually: Full disaster recovery test
@@ -245,11 +263,13 @@ Jika terjadi incident:
 ## 🎯 KESIMPULAN
 
 **3 Aturan Utama:**
+
 1. ✅ **BACKUP** setiap hari otomatis
 2. ✅ **JANGAN** gunakan migrate:fresh di production
 3. ✅ **CEK** environment sebelum operasi berbahaya
 
 **Ingat:**
+
 - Code bisa diperbaiki
 - Server bisa diganti
 - **DATA YANG HILANG TIDAK BISA KEMBALI**

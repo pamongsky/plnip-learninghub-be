@@ -20,13 +20,13 @@ echo str_repeat("-", 80) . "\n";
 try {
     $existingUsers = User::all();
     echo "Found " . count($existingUsers) . " users to delete\n";
-    
+
     foreach ($existingUsers as $user) {
         echo "  Deleting: {$user->email}... ";
         $user->delete();
         echo "✓\n";
     }
-    
+
     echo "✓ All users deleted\n\n";
 } catch (\Exception $e) {
     echo "❌ Error deleting users: " . $e->getMessage() . "\n\n";
@@ -54,23 +54,23 @@ try {
         'password' => Hash::make('superadmin123'),
         'email_verified_at' => now(),
     ]);
-    
+
     echo "✓ User created\n";
     echo "  Email: superadmin@plnip.local\n";
     echo "  Password: superadmin123\n";
     echo "  ID: {$superAdmin->id}\n\n";
-    
+
     // Assign super-admin role
     echo "Step 4: Assigning super-admin role...\n";
     echo str_repeat("-", 80) . "\n";
-    
+
     $superAdmin->assignRole('super-admin');
     echo "✓ Role assigned\n\n";
-    
+
     // Give all permissions
     echo "Step 5: Assigning all permissions...\n";
     echo str_repeat("-", 80) . "\n";
-    
+
     $permissions = Permission::all();
     if (count($permissions) > 0) {
         $superAdminRole->syncPermissions($permissions);
@@ -78,7 +78,7 @@ try {
     } else {
         echo "⚠️  No permissions found in database\n";
     }
-    
+
 } catch (\Exception $e) {
     echo "❌ Error creating superadmin: " . $e->getMessage() . "\n\n";
 }
@@ -92,9 +92,9 @@ echo str_repeat("━", 80) . "\n\n";
 try {
     $totalUsers = User::count();
     $superAdmin = User::where('email', 'superadmin@plnip.local')->first();
-    
+
     echo "Total Users: $totalUsers\n\n";
-    
+
     if ($superAdmin) {
         echo "✓ Superadmin Account:\n";
         echo "  Email: {$superAdmin->email}\n";
@@ -105,7 +105,7 @@ try {
     } else {
         echo "❌ Superadmin not found!\n";
     }
-    
+
 } catch (\Exception $e) {
     echo "❌ Error: " . $e->getMessage() . "\n";
 }

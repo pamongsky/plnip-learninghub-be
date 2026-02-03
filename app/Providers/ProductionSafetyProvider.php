@@ -25,7 +25,7 @@ class ProductionSafetyProvider extends ServiceProvider
             $this->blockDangerousCommands();
         }
     }
-    
+
     /**
      * Block dangerous Artisan commands in production
      */
@@ -38,12 +38,12 @@ class ProductionSafetyProvider extends ServiceProvider
             'db:wipe',
             'db:seed --force',
         ];
-        
+
         // Intercept Artisan commands
         Artisan::starting(function ($artisan) use ($blockedCommands) {
             $command = request()->server('argv', []);
             $commandString = implode(' ', array_slice($command, 1));
-            
+
             foreach ($blockedCommands as $blocked) {
                 if (str_contains($commandString, $blocked)) {
                     fwrite(STDERR, "\n");
@@ -58,7 +58,7 @@ class ProductionSafetyProvider extends ServiceProvider
                     fwrite(STDERR, "  • php artisan migrate (adds new tables safely)\n");
                     fwrite(STDERR, "  • Contact DBA for database operations\n");
                     fwrite(STDERR, "\n");
-                    
+
                     exit(1);
                 }
             }

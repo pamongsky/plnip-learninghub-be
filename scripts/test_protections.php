@@ -46,7 +46,7 @@ foreach ($tests as $idx => $test) {
     echo "Command: php artisan {$test['command']}\n";
     echo "Expected: {$test['expected']}\n";
     echo "Reason: {$test['description']}\n";
-    
+
     // Simulate behavior
     if ($test['env'] === 'production' && str_contains($test['command'], 'fresh')) {
         echo "Result: ✓ BLOCKED (Command would fail with error)\n";
@@ -65,7 +65,7 @@ foreach ($tests as $idx => $test) {
         echo "  → No restrictions in local\n";
         $passed++;
     }
-    
+
     echo "\n";
 }
 

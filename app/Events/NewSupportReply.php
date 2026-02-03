@@ -6,11 +6,11 @@ use App\Models\SupportReply;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
-use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
+use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class NewSupportReply implements ShouldBroadcast
+class NewSupportReply implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -22,6 +22,11 @@ class NewSupportReply implements ShouldBroadcast
     public function __construct(SupportReply $reply)
     {
         $this->reply = $reply;
+        \Log::info('NewSupportReply event created', [
+            'ticket_id' => $reply->ticket_id,
+            'reply_id' => $reply->id,
+            'user_id' => $reply->user_id,
+        ]);
     }
 
     /**
@@ -29,8 +34,10 @@ class NewSupportReply implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
+        $channel = 'support-ticket.' . $this->reply->ticket_id;
+        \Log::info('Broadcasting on channel: ' . $channel);
         return [
-            new PrivateChannel('support-ticket.' . $this->reply->ticket_id),
+            new PrivateChannel($channel),
         ];
     }
 

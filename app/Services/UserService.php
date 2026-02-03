@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\AuditLog;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 class UserService
 {
@@ -45,7 +46,7 @@ class UserService
             if (!$user->relationLoaded('roles')) {
                 $user->load('roles');
             }
-            
+
             if ($user->roles && $user->roles->count() > 0) {
                 $roleName = $user->roles->first()?->name;
                 if ($roleName) {
@@ -67,8 +68,22 @@ class UserService
     {
         $data['source'] = 'manual';
         $data['password'] = Hash::make($data['password'] ?? 'TempPassword123!');
+        $data['email_verified_at'] = now();
+        $data['is_active'] = true;
 
-        $user = User::create($data);
+        // Create user without using create() to avoid insertGetId issue
+        $user = new User();
+        $user->name = $data['name'];
+        $user->email = $data['email'];
+        $user->password = $data['password'];
+        $user->phone = $data['phone'] ?? null;
+        $user->employee_id = $data['employee_id'] ?? null;
+        $user->department = $data['department'] ?? null;
+        $user->position = $data['position'] ?? null;
+        $user->source = $data['source'];
+        $user->is_active = $data['is_active'];
+        $user->email_verified_at = $data['email_verified_at'];
+        $user->save();
 
         // Assign role
         $role = $data['role'] ?? 'user';

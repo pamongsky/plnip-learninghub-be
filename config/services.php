@@ -35,4 +35,13 @@ return [
         ],
     ],
 
+    'moodle' => [
+        'url' => env('MOODLE_URL'),
+        'token' => env('MOODLE_WS_TOKEN'),
+    ],
+
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+    ],
+
 ];

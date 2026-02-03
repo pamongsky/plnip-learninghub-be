@@ -88,7 +88,7 @@ class UserController extends \App\Http\Controllers\Controller
 
         // Load roles untuk efficient queries
         $query->with('roles');
-        
+
         $users = $query->paginate($request->get('per_page', 15));
 
         // Add effective role to each user
@@ -108,10 +108,10 @@ class UserController extends \App\Http\Controllers\Controller
         try {
             // Load roles relationship
             $user->load('roles');
-            
+
             // Calculate effective role
             $user->effective_role = UserService::getEffectiveRole($user);
-            
+
             return response()->json($user, 200);
         } catch (\Exception $e) {
             return response()->json([
@@ -140,7 +140,7 @@ class UserController extends \App\Http\Controllers\Controller
             'phone' => 'nullable|string',
             'department' => 'nullable|string',
             'position' => 'nullable|string',
-            'role' => 'required|string|in:super-admin,admin,instructor,employee,user',
+            'role' => 'required|string|in:super-admin,admin,instructor,employee',
             'password' => 'nullable|string|min:8',
         ]);
 
@@ -170,7 +170,7 @@ class UserController extends \App\Http\Controllers\Controller
     public function update(Request $request, User $user): JsonResponse
     {
         // Check permission: hanya super admin atau admin yang manage unit yang sama
-        if (!$request->user() || !($request->user()->hasRole('super-admin') || 
+        if (!$request->user() || !($request->user()->hasRole('super-admin') ||
             ($request->user()->hasRole('admin') && $request->user()->department === $user->department))) {
             return response()->json([
                 'message' => 'Anda tidak memiliki izin untuk mengubah user ini'
@@ -191,7 +191,7 @@ class UserController extends \App\Http\Controllers\Controller
             'phone' => 'nullable|string',
             'department' => 'nullable|string',
             'position' => 'nullable|string',
-            'role' => 'sometimes|string|in:super-admin,admin,instructor,employee,user',
+            'role' => 'sometimes|string|in:super-admin,admin,instructor,employee',
             'is_active' => 'sometimes|boolean',
             'reason' => 'nullable|string',
         ]);
@@ -244,7 +244,7 @@ class UserController extends \App\Http\Controllers\Controller
         }
 
         $validated = $request->validate([
-            'role' => 'required|string|in:super-admin,admin,instructor,employee,user',
+            'role' => 'required|string|in:super-admin,admin,instructor,employee',
             'reason' => 'required|string|max:500',
         ]);
 

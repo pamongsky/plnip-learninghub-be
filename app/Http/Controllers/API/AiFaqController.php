@@ -143,7 +143,7 @@ class AiFaqController extends Controller
 
         $faq->update(array_merge(
             $request->only([
-                'category', 'question', 'question_variations', 
+                'category', 'question', 'question_variations',
                 'answer', 'answer_short', 'confidence_score',
                 'is_active', 'is_verified'
             ]),

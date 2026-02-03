@@ -3,12 +3,14 @@
 ## 🚨 EMERGENCY: Data Loss Terjadi?
 
 ### LANGKAH PERTAMA (JANGAN PANIK):
+
 1. **STOP** semua operasi database
 2. **JANGAN** jalankan command apapun lagi
 3. Hubungi DBA segera
 4. Cek backup terakhir
 
 ### Recovery Steps:
+
 ```bash
 # 1. Cek recycle bin
 php scripts/check_recycle_bin.php
@@ -26,6 +28,7 @@ FLASHBACK TABLE users TO BEFORE DROP;
 ## ✅ ATURAN EMAS - HAFAL INI!
 
 ### ❌ JANGAN PERNAH di Production:
+
 ```bash
 ❌ php artisan migrate:fresh     # DELETES ALL DATA
 ❌ php artisan migrate:refresh   # DELETES ALL DATA
@@ -35,6 +38,7 @@ FLASHBACK TABLE users TO BEFORE DROP;
 ```
 
 ### ✅ SELALU Gunakan Ini:
+
 ```bash
 ✅ php artisan migrate            # SAFE - hanya tambah table
 ✅ php artisan migrate:safe       # EXTRA SAFE dengan konfirmasi
@@ -62,6 +66,7 @@ FLASHBACK TABLE users TO BEFORE DROP;
 ## 🔧 SETUP PERTAMA KALI
 
 ### 1. Setup Backup Otomatis (WAJIB):
+
 ```powershell
 # Run as Administrator
 cd C:\laragon\www\plnip-portal\scripts
@@ -69,6 +74,7 @@ cd C:\laragon\www\plnip-portal\scripts
 ```
 
 ### 2. Enable Flashback Database:
+
 ```sql
 sqlplus / as sysdba
 ALTER DATABASE FLASHBACK ON;
@@ -76,6 +82,7 @@ ALTER SYSTEM SET DB_FLASHBACK_RETENTION_TARGET=1440;
 ```
 
 ### 3. Verify Protections:
+
 ```bash
 php scripts/verify_safety.php
 ```
@@ -85,6 +92,7 @@ php scripts/verify_safety.php
 ## 🚀 DEPLOYMENT WORKFLOW
 
 ### Workflow AMAN (Copy ini):
+
 ```bash
 # 1. BACKUP DULU!
 expdp system/password@ORCL DIRECTORY=DATA_PUMP_DIR \
@@ -118,6 +126,7 @@ php artisan up
 ## 💾 BACKUP COMMANDS
 
 ### Manual Backup (Sebelum operasi berisiko):
+
 ```bash
 # Full backup (semua data)
 expdp system/password@ORCL \
@@ -133,6 +142,7 @@ expdp system/password@ORCL \
 ```
 
 ### Restore dari Backup:
+
 ```bash
 # Full restore
 impdp system/password@ORCL \
@@ -153,6 +163,7 @@ impdp system/password@ORCL \
 ## 🔍 MONITORING
 
 ### Cek Status Backup:
+
 ```powershell
 # Cek scheduled task
 Get-ScheduledTask -TaskName "Oracle_Daily_Backup_PLNIP"
@@ -165,14 +176,15 @@ Get-Content C:\oracle\backups\backup_*.log | Select-Object -Last 50
 ```
 
 ### Cek Backup Files:
+
 ```powershell
 # List backups
-Get-ChildItem "C:\oracle\backups\*.dmp" | 
-  Select-Object Name, Length, LastWriteTime | 
+Get-ChildItem "C:\oracle\backups\*.dmp" |
+  Select-Object Name, Length, LastWriteTime |
   Sort-Object LastWriteTime -Descending
 
 # Size total
-(Get-ChildItem "C:\oracle\backups\*.dmp" | 
+(Get-ChildItem "C:\oracle\backups\*.dmp" |
   Measure-Object -Property Length -Sum).Sum / 1GB
 ```
 
@@ -181,12 +193,14 @@ Get-ChildItem "C:\oracle\backups\*.dmp" |
 ## 📞 CONTACTS
 
 **Jika ada masalah:**
+
 - DBA Oracle: [phone/email]
-- IT Manager: [phone/email]  
+- IT Manager: [phone/email]
 - DevOps Team: [phone/email]
 - Emergency Line: [phone]
 
 **Dokumentasi:**
+
 - Full Guide: `PRODUCTION_SAFETY_GUIDE.md`
 - Backup Scripts: `scripts/oracle_backup.ps1`
 - Verification: `scripts/verify_safety.php`
@@ -196,11 +210,13 @@ Get-ChildItem "C:\oracle\backups\*.dmp" |
 ## 🎯 REMEMBER
 
 ### 3 Aturan Utama:
+
 1. ✅ **BACKUP SETIAP HARI** (automated)
 2. ✅ **JANGAN migrate:fresh di production** (BLOCKED)
 3. ✅ **CEK ENVIRONMENT** sebelum operasi (php artisan env)
 
 ### Jika Ragu:
+
 - ❓ Tidak yakin? → **JANGAN lakukan!**
 - ❓ Butuh reset database? → **Hubungi DBA**
 - ❓ Ada error? → **Backup dulu baru fix**

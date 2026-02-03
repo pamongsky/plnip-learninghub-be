@@ -11,7 +11,7 @@ echo "🚨 CRITICAL DATA LOSS ASSESSMENT\n\n";
 
 // Check recycle bin for USERS table specifically
 $userVersions = DB::select("
-    SELECT 
+    SELECT
         OBJECT_NAME,
         ORIGINAL_NAME,
         DROPTIME,
@@ -40,7 +40,7 @@ echo str_repeat("=", 80) . "\n";
 
 foreach ($criticalTables as $table) {
     $versions = DB::select("
-        SELECT 
+        SELECT
             OBJECT_NAME,
             ORIGINAL_NAME,
             DROPTIME,
@@ -49,12 +49,12 @@ foreach ($criticalTables as $table) {
         WHERE ORIGINAL_NAME = ?
         ORDER BY DROPTIME ASC
     ", [$table]);
-    
+
     echo "\n$table: " . count($versions) . " version(s)\n";
-    
+
     $hasData = false;
     $oldestWithData = null;
-    
+
     foreach ($versions as $version) {
         if ($version->space > 0) {
             $hasData = true;
@@ -63,7 +63,7 @@ foreach ($criticalTables as $table) {
             }
         }
     }
-    
+
     if ($hasData && $oldestWithData) {
         echo "  ✓ RECOVERABLE from {$oldestWithData->droptime}\n";
         echo "    Recycle Name: {$oldestWithData->object_name}\n";
@@ -83,13 +83,13 @@ if (count($userVersions) == 1 && $userVersions[0]->space <= 8) {
     echo "  • Only 1 version in recycle bin (from today's migrate:fresh)\n";
     echo "  • That version is empty (Space = 8 blocks = structure only)\n";
     echo "  • Original user data is NOT in recycle bin\n\n";
-    
+
     echo "⚠️  THIS MEANS:\n";
     echo "  • All user accounts are gone\n";
     echo "  • All authentication data lost\n";
     echo "  • All role assignments lost\n";
     echo "  • Cannot recover without backup\n\n";
-    
+
     echo "🔴 EMERGENCY OPTIONS:\n";
     echo "  1. Check Oracle RMAN backups: rman target /\n";
     echo "  2. Check if exports exist: ls -la *.dmp\n";
@@ -97,7 +97,7 @@ if (count($userVersions) == 1 && $userVersions[0]->space <= 8) {
     echo "  4. Check if Storage Snapshots exist (SAN/EMC/NetApp)\n";
     echo "  5. Contact Oracle DBA for recovery options\n";
     echo "  6. Check application-level backups (if any)\n\n";
-    
+
     echo "❌ IF NO BACKUPS EXIST:\n";
     echo "  • Data is permanently lost\n";
     echo "  • Must rebuild user database from scratch\n";
@@ -116,7 +116,7 @@ try {
         FROM V\$BACKUP_SET
         WHERE COMPLETION_TIME > SYSDATE - 7
     ");
-    
+
     if ($rmanCheck[0]->backup_count > 0) {
         echo "✓ RMAN backups found: {$rmanCheck[0]->backup_count} backup(s) in last 7 days\n";
         echo "  → Contact DBA to restore from RMAN backup\n\n";

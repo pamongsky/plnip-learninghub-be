@@ -37,6 +37,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
 
+    // =====================
+    // AI ASSISTANT
+    // =====================
+    Route::prefix('ai-assistant')->group(function () {
+        Route::get('/context', [\App\Http\Controllers\API\AIAssistantController::class, 'getContext']);
+        Route::post('/chat', [\App\Http\Controllers\API\AIAssistantController::class, 'chat']);
+        Route::get('/course/{courseId}/content', [\App\Http\Controllers\API\AIAssistantController::class, 'getCourseContent']);
+    });
+
+    // =====================
+    // COURSE LEARNING ASSISTANT (AI reads course materials)
+    // =====================
+    Route::prefix('course-assistant')->group(function () {
+        Route::get('/{courseId}/structure', [\App\Http\Controllers\API\CourseLearningAssistantController::class, 'getCourseStructure']);
+        Route::post('/read-material', [\App\Http\Controllers\API\CourseLearningAssistantController::class, 'readMaterial']);
+        Route::post('/chat', [\App\Http\Controllers\API\CourseLearningAssistantController::class, 'chatAboutCourse']);
+    });
+
     // Dashboard
     Route::get('/users', [\App\Http\Controllers\API\UserController::class, 'index']);
     Route::get('/dashboard/employee', [DashboardController::class, 'employeeDashboard']);
@@ -126,24 +144,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // SUPPORT TICKET ROUTES
     // =====================
     Route::prefix('support')->group(function () {
-        Route::get('/tickets', [SupportTicketController::class, 'index']);
-        // Moved up to prevent conflict with {id}
-        Route::get('/stats', [SupportTicketController::class, 'getStats']); // Changed from /tickets/stats to /stats based on controller prefix logic, but prefix is 'support', controller uses 'getStats'. Wait, frontend calls /support/tickets/stats. So it should be under prefix support.
-        // Actually, looking at the file content:
-        // Route::prefix('support')->group(function () {
-        //     Route::get('/tickets', [SupportTicketController::class, 'index']);
-        //     Route::get('/tickets/stats', [SupportTicketController::class, 'getStats']);
-        //     Route::get('/tickets/{id}', [SupportTicketController::class, 'show']);
-        // });
-        // The issue is definitely order.
-
-        Route::get('/tickets/stats', [SupportTicketController::class, 'getStats']);
-        Route::get('/tickets/{id}', [SupportTicketController::class, 'show']);
-        Route::get('/tickets', [SupportTicketController::class, 'index']); // Index should be accessible too.
-
-        // Let's rewrite the block clearly.
         Route::get('/tickets/stats', [SupportTicketController::class, 'getStats']);
         Route::get('/tickets', [SupportTicketController::class, 'index']);
+        Route::post('/tickets', [SupportTicketController::class, 'store']); // Create ticket
         Route::get('/tickets/{id}', [SupportTicketController::class, 'show']);
         Route::post('/tickets/{id}/reply', [SupportTicketController::class, 'addReply']);
         Route::patch('/tickets/{id}/status', [SupportTicketController::class, 'updateStatus']);
@@ -249,7 +252,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [\App\Http\Controllers\API\AiFaqController::class, 'update']);
         Route::delete('/{id}', [\App\Http\Controllers\API\AiFaqController::class, 'destroy']);
         Route::post('/bulk-toggle', [\App\Http\Controllers\API\AiFaqController::class, 'bulkToggle']);
-        
+
         // FAQ Suggestions (Auto-Learn)
         Route::get('/suggestions/list', [\App\Http\Controllers\API\AiFaqController::class, 'suggestions']);
         Route::post('/suggestions/{id}/approve', [\App\Http\Controllers\API\AiFaqController::class, 'approveSuggestion']);

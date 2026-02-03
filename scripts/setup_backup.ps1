@@ -99,7 +99,7 @@ if ($runTest -eq 'y' -or $runTest -eq 'Y') {
     Write-Host ""
     Write-Host "Running test backup..." -ForegroundColor Yellow
     Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Gray
-    
+
     try {
         & powershell.exe -ExecutionPolicy Bypass -File $SCRIPT_PATH
         Write-Host ""

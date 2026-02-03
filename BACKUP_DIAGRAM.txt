@@ -11,7 +11,7 @@
           ├─► Buat Windows Task Scheduler
           ├─► Schedule: Daily at 2:00 AM
           └─► Test backup (optional)
-          
+
           ↓ Setup selesai, tinggal tunggu...
 
 ═══════════════════════════════════════════════════════════════════════════
@@ -95,7 +95,7 @@
          │
          ▼
 ┌────────────────────┐
-│ 3. Restore         │──► impdp system/password@ORCL 
+│ 3. Restore         │──► impdp system/password@ORCL
 │    Database        │    DUMPFILE=plnip_backup_*.dmp
 └────────┬───────────┘    FULL=Y
          │
@@ -163,7 +163,7 @@ Senin      02:00 AM ──► Backup ──► plnip_backup_20260210.dmp (Keep)
    Run script   ──►   Jam 2 pagi backup  ──►  File .dmp ready
    setup_backup.ps1    (otomatis)              for restore
 
-   
+
    ✅ Anda: Setup 1x aja (5 menit)
    ✅ System: Backup tiap hari otomatis
    ✅ Result: Data aman, bisa restore kapan saja

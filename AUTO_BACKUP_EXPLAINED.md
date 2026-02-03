@@ -5,6 +5,7 @@
 Auto backup = **Windows Task Scheduler** yang jalankan script backup Oracle **otomatis setiap hari jam 2 pagi**.
 
 ### Cara Kerjanya:
+
 ```
 1. Jam 2 pagi → Windows Task Scheduler terbangun
 2. Jalankan script → oracle_backup.ps1
@@ -37,6 +38,7 @@ cd C:\laragon\www\plnip-portal\scripts
 ### Step 2: Isi Informasi yang Ditanya
 
 Script akan tanya:
+
 ```
 Enter Oracle username: system         ← Isi username Oracle
 Enter Oracle password: ******         ← Isi password Oracle
@@ -46,6 +48,7 @@ Enter Oracle SID: ORCL                ← Isi SID database (biasanya ORCL)
 ### Step 3: Test Backup (Optional)
 
 Script akan tanya:
+
 ```
 Do you want to run a test backup now? (y/n): y
 ```
@@ -55,6 +58,7 @@ Ketik `y` untuk test backup langsung (recommended).
 ### Step 4: Selesai!
 
 Output:
+
 ```
 ✅ BACKUP AUTOMATION SETUP COMPLETE!
 
@@ -72,6 +76,7 @@ Output:
 ## 🔍 CEK BACKUP BERJALAN ATAU TIDAK
 
 ### Cara 1: Cek Scheduled Task
+
 ```powershell
 # Cek status task
 Get-ScheduledTask -TaskName "Oracle_Daily_Backup_PLNIP"
@@ -83,9 +88,10 @@ Get-ScheduledTask -TaskName "Oracle_Daily_Backup_PLNIP"
 ```
 
 ### Cara 2: Cek File Backup
+
 ```powershell
 # List semua backup
-Get-ChildItem C:\oracle\backups\*.dmp | 
+Get-ChildItem C:\oracle\backups\*.dmp |
     Select-Object Name, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB,2)}}, LastWriteTime
 
 # Output:
@@ -96,6 +102,7 @@ Get-ChildItem C:\oracle\backups\*.dmp |
 ```
 
 ### Cara 3: Cek Log Backup
+
 ```powershell
 # Baca log backup terakhir
 Get-Content C:\oracle\backups\backup_*.log | Select-Object -Last 20
@@ -134,14 +141,16 @@ Get-ScheduledTaskInfo -TaskName "Oracle_Daily_Backup_PLNIP"
 
 Script backup ini export **SEMUA DATA** Oracle:
 
-### 1. Full Backup (plnip_backup_*.dmp)
+### 1. Full Backup (plnip*backup*\*.dmp)
+
 - ✓ Semua table (USERS, ROLES, PERMISSIONS, dll)
 - ✓ Semua data
 - ✓ Semua index & constraint
 - ✓ Semua procedure & function
 - ✓ Compressed (hemat space)
 
-### 2. Critical Tables Backup (plnip_critical_*.dmp)
+### 2. Critical Tables Backup (plnip*critical*\*.dmp)
+
 - ✓ USERS
 - ✓ ROLES
 - ✓ PERMISSIONS
@@ -150,6 +159,7 @@ Script backup ini export **SEMUA DATA** Oracle:
 - ✓ SUPPORT_TICKETS
 
 **Kenapa 2 backup?**
+
 - Full backup = restore complete (tapi besar & lama)
 - Critical backup = restore cepat (table penting aja)
 
@@ -160,6 +170,7 @@ Script backup ini export **SEMUA DATA** Oracle:
 Kalau suatu saat perlu restore (semoga ga perlu lagi!):
 
 ### Restore Full Database:
+
 ```bash
 impdp system/password@ORCL \
   DIRECTORY=DATA_PUMP_DIR \
@@ -168,6 +179,7 @@ impdp system/password@ORCL \
 ```
 
 ### Restore Table Tertentu:
+
 ```bash
 impdp system/password@ORCL \
   DIRECTORY=DATA_PUMP_DIR \
@@ -218,6 +230,7 @@ $BACKUP_DIR = "D:\backups\oracle"
 ## 📊 MONITORING BACKUP
 
 ### Setiap Minggu, Cek:
+
 ```powershell
 # 1. Cek backup berjalan normal
 Get-ScheduledTaskInfo -TaskName "Oracle_Daily_Backup_PLNIP"
@@ -226,12 +239,13 @@ Get-ScheduledTaskInfo -TaskName "Oracle_Daily_Backup_PLNIP"
 (Get-ChildItem C:\oracle\backups\plnip_backup_*.dmp).Count
 
 # 3. Cek size backup normal (tidak 0 KB)
-Get-ChildItem C:\oracle\backups\plnip_backup_*.dmp | 
+Get-ChildItem C:\oracle\backups\plnip_backup_*.dmp |
     Measure-Object -Property Length -Sum |
     Select-Object @{Name="TotalSize(GB)";Expression={$_.Sum/1GB}}
 ```
 
 ### Setiap Bulan, Test:
+
 ```powershell
 # Test restore backup ke database test
 # (Jangan restore ke production!)
@@ -246,6 +260,7 @@ impdp system/password@TESTDB \
 ## ⚠️ TROUBLESHOOTING
 
 ### Problem 1: Task tidak jalan
+
 ```powershell
 # Cek status task
 Get-ScheduledTask -TaskName "Oracle_Daily_Backup_PLNIP"
@@ -255,6 +270,7 @@ Enable-ScheduledTask -TaskName "Oracle_Daily_Backup_PLNIP"
 ```
 
 ### Problem 2: Backup gagal (LastTaskResult ≠ 0)
+
 ```powershell
 # Cek log error
 Get-Content C:\oracle\backups\backup_*.log | Select-Object -Last 50
@@ -265,6 +281,7 @@ echo $env:DB_SID
 ```
 
 ### Problem 3: Disk penuh
+
 ```powershell
 # Cek space disk
 Get-PSDrive C | Select-Object Used,Free
@@ -279,11 +296,13 @@ $RETENTION_DAYS = 3  # Simpan cuma 3 hari
 ## 📞 SUPPORT
 
 **Kalau ada masalah:**
+
 1. Cek log: `C:\oracle\backups\backup_*.log`
 2. Test manual: `Start-ScheduledTask -TaskName "Oracle_Daily_Backup_PLNIP"`
 3. Verify script: `php scripts/verify_safety.php`
 
 **Emergency restore:**
+
 1. Cari backup terakhir: `C:\oracle\backups\`
 2. Restore dengan impdp (command di atas)
 3. Inform DBA/team
@@ -293,6 +312,7 @@ $RETENTION_DAYS = 3  # Simpan cuma 3 hari
 ## ✅ CHECKLIST SETUP
 
 Pastikan semua ini sudah:
+
 ```
 □ Script setup sudah dijalankan (setup_backup.ps1)
 □ Scheduled task terbuat (cek dengan Get-ScheduledTask)
@@ -304,7 +324,8 @@ Pastikan semua ini sudah:
 
 ---
 
-**Intinya:** 
+**Intinya:**
+
 1. **Setup sekali** → Jalankan `setup_backup.ps1`
 2. **Lupa aja** → Backup jalan otomatis tiap hari
 3. **Cek kadang-kadang** → Pastikan file backup bertambah

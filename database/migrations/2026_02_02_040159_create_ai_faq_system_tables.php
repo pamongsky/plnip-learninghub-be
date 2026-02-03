@@ -32,7 +32,7 @@ return new class extends Migration
             $table->foreignId('updated_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamps();
             $table->softDeletes();
-            
+
             // Indexes for performance
             $table->index(['category', 'is_active']);
             $table->index(['confidence_score', 'is_active']);
@@ -50,7 +50,7 @@ return new class extends Migration
             $table->string('response_source', 20); // 'faq', 'gemini', 'cache'
             $table->integer('response_time_ms'); // milliseconds
             $table->timestamps();
-            
+
             $table->index(['faq_id', 'created_at']);
             $table->index(['user_id', 'created_at']);
         });
@@ -66,7 +66,7 @@ return new class extends Migration
             $table->timestamp('reviewed_at')->nullable();
             $table->text('review_notes')->nullable();
             $table->timestamps();
-            
+
             $table->index(['status', 'occurrence_count']);
         });
 

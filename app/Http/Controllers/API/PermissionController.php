@@ -19,17 +19,17 @@ class PermissionController extends Controller
     {
         try {
             $permissions = Permission::orderBy('name')->get();
-            
+
             // Group by category
             $grouped = [];
             foreach ($permissions as $perm) {
                 $parts = explode('.', $perm->name);
                 $category = $parts[0] ?? 'other';
-                
+
                 if (!isset($grouped[$category])) {
                     $grouped[$category] = [];
                 }
-                
+
                 $grouped[$category][] = [
                     'id' => $perm->id,
                     'name' => $perm->name,
@@ -38,7 +38,7 @@ class PermissionController extends Controller
                     'updated_at' => $perm->updated_at,
                 ];
             }
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -106,10 +106,10 @@ class PermissionController extends Controller
     {
         try {
             $permission = Permission::findOrFail($id);
-            
+
             // Get roles that have this permission
             $roles = $permission->roles()->get(['id', 'name']);
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -176,10 +176,10 @@ class PermissionController extends Controller
     {
         try {
             $permission = Permission::findOrFail($id);
-            
+
             // Check if permission is assigned to any role
             $rolesCount = $permission->roles()->count();
-            
+
             if ($rolesCount > 0) {
                 return response()->json([
                     'success' => false,
@@ -347,10 +347,10 @@ class PermissionController extends Controller
         try {
             $totalPermissions = Permission::count();
             $totalRoles = Role::count();
-            
+
             // Permissions not assigned to any role
             $unassigned = Permission::doesntHave('roles')->count();
-            
+
             // Most used permissions
             $mostUsed = Permission::withCount('roles')
                 ->orderBy('roles_count', 'desc')

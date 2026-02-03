@@ -6,12 +6,14 @@ Auth: Bearer Token (Super Admin only)
 ## 📋 **ENDPOINTS**
 
 ### 1. **GET /** - List All Permissions
+
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://localhost:3000/api/superadmin/permissions
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -30,6 +32,7 @@ Response:
 ---
 
 ### 2. **POST /** - Create Single Permission
+
 ```bash
 curl -X POST \
   -H "Authorization: Bearer YOUR_TOKEN" \
@@ -39,19 +42,21 @@ curl -X POST \
 ```
 
 Response:
+
 ```json
 {
-  "success": true,
-  "message": "Permission created successfully",
-  "data": {
-    "id": 34,
-    "name": "reports.delete",
-    "guard_name": "web"
-  }
+    "success": true,
+    "message": "Permission created successfully",
+    "data": {
+        "id": 34,
+        "name": "reports.delete",
+        "guard_name": "web"
+    }
 }
 ```
 
 **Validation:**
+
 - Format harus: `category.action` (e.g. users.create)
 - Lowercase only
 - Unique (tidak boleh duplikat)
@@ -59,6 +64,7 @@ Response:
 ---
 
 ### 3. **POST /bulk** - Create Multiple Permissions
+
 ```bash
 curl -X POST \
   -H "Authorization: Bearer YOUR_TOKEN" \
@@ -75,6 +81,7 @@ curl -X POST \
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -89,6 +96,7 @@ Response:
 ---
 
 ### 4. **POST /sync-standard** - Sync Standard Permissions
+
 ```bash
 curl -X POST \
   -H "Authorization: Bearer YOUR_TOKEN" \
@@ -96,10 +104,12 @@ curl -X POST \
 ```
 
 Auto-create semua standard permissions yang belum ada:
-- users.*, announcements.*, courses.*, reports.*
-- messages.*, tickets.*, escalations.*, settings.*
+
+- users._, announcements._, courses._, reports._
+- messages._, tickets._, escalations._, settings._
 
 Response:
+
 ```json
 {
   "success": true,
@@ -115,32 +125,35 @@ Response:
 ---
 
 ### 5. **GET /{id}** - View Single Permission
+
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://localhost:3000/api/superadmin/permissions/1
 ```
 
 Response:
+
 ```json
 {
-  "success": true,
-  "data": {
-    "permission": {
-      "id": 1,
-      "name": "users.view"
-    },
-    "roles": [
-      {"id": 1, "name": "super-admin"},
-      {"id": 2, "name": "admin"}
-    ],
-    "roles_count": 2
-  }
+    "success": true,
+    "data": {
+        "permission": {
+            "id": 1,
+            "name": "users.view"
+        },
+        "roles": [
+            { "id": 1, "name": "super-admin" },
+            { "id": 2, "name": "admin" }
+        ],
+        "roles_count": 2
+    }
 }
 ```
 
 ---
 
 ### 6. **PUT /{id}** - Update Permission
+
 ```bash
 curl -X PUT \
   -H "Authorization: Bearer YOUR_TOKEN" \
@@ -150,20 +163,22 @@ curl -X PUT \
 ```
 
 Response:
+
 ```json
 {
-  "success": true,
-  "message": "Permission updated successfully",
-  "data": {
-    "id": 1,
-    "name": "users.view-all"
-  }
+    "success": true,
+    "message": "Permission updated successfully",
+    "data": {
+        "id": 1,
+        "name": "users.view-all"
+    }
 }
 ```
 
 ---
 
 ### 7. **DELETE /{id}** - Delete Permission
+
 ```bash
 curl -X DELETE \
   -H "Authorization: Bearer YOUR_TOKEN" \
@@ -171,42 +186,46 @@ curl -X DELETE \
 ```
 
 Response (Success):
+
 ```json
 {
-  "success": true,
-  "message": "Permission deleted successfully"
+    "success": true,
+    "message": "Permission deleted successfully"
 }
 ```
 
 Response (Error - masih dipakai):
+
 ```json
 {
-  "success": false,
-  "message": "Cannot delete permission. It is assigned to 3 role(s). Remove from roles first."
+    "success": false,
+    "message": "Cannot delete permission. It is assigned to 3 role(s). Remove from roles first."
 }
 ```
 
 ---
 
 ### 8. **GET /stats** - Permission Statistics
+
 ```bash
 curl -H "Authorization: Bearer YOUR_TOKEN" \
   http://localhost:3000/api/superadmin/permissions/stats
 ```
 
 Response:
+
 ```json
 {
-  "success": true,
-  "data": {
-    "total_permissions": 33,
-    "total_roles": 4,
-    "unassigned_permissions": 5,
-    "most_used_permissions": [
-      {"name": "users.view", "roles_count": 3},
-      {"name": "announcements.view", "roles_count": 4}
-    ]
-  }
+    "success": true,
+    "data": {
+        "total_permissions": 33,
+        "total_roles": 4,
+        "unassigned_permissions": 5,
+        "most_used_permissions": [
+            { "name": "users.view", "roles_count": 3 },
+            { "name": "announcements.view", "roles_count": 4 }
+        ]
+    }
 }
 ```
 
@@ -215,6 +234,7 @@ Response:
 ## 🚀 **USAGE EXAMPLES**
 
 ### Create New FAQ Permissions
+
 ```bash
 # Bulk create untuk fitur FAQ baru
 curl -X POST \
@@ -233,6 +253,7 @@ curl -X POST \
 ```
 
 ### Sync Missing Permissions
+
 ```bash
 # Auto-add semua standard permissions yang hilang
 curl -X POST \
@@ -241,6 +262,7 @@ curl -X POST \
 ```
 
 ### Check Permission Usage
+
 ```bash
 # Sebelum hapus, cek dulu dipakai berapa role
 curl -H "Authorization: Bearer YOUR_TOKEN" \
@@ -267,33 +289,33 @@ Contoh panggil dari Next.js:
 ```typescript
 // Create permission
 const createPermission = async (name: string) => {
-  const res = await fetch('/api/superadmin/permissions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ name })
-  });
-  return res.json();
+    const res = await fetch("/api/superadmin/permissions", {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name }),
+    });
+    return res.json();
 };
 
 // Sync standard permissions
 const syncPermissions = async () => {
-  const res = await fetch('/api/superadmin/permissions/sync-standard', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
-  return res.json();
+    const res = await fetch("/api/superadmin/permissions/sync-standard", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.json();
 };
 
 // Delete permission
 const deletePermission = async (id: number) => {
-  const res = await fetch(`/api/superadmin/permissions/${id}`, {
-    method: 'DELETE',
-    headers: { 'Authorization': `Bearer ${token}` }
-  });
-  return res.json();
+    const res = await fetch(`/api/superadmin/permissions/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.json();
 };
 ```
 

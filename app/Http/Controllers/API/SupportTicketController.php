@@ -61,6 +61,13 @@ class SupportTicketController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Debug log
+        \Log::info('Support ticket creation request:', [
+            'all_data' => $request->all(),
+            'category' => $request->input('category'),
+            'has_files' => $request->hasFile('attachments'),
+        ]);
+
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
             'description' => 'required|string|max:5000',
@@ -70,6 +77,8 @@ class SupportTicketController extends Controller
             'attachments' => 'nullable|array|max:5',
             'attachments.*' => 'file|max:10240|mimes:jpeg,png,jpg,pdf,doc,docx',
         ]);
+
+        \Log::info('Validated data:', $validated);
 
         $attachments = $this->handleAttachments($request);
 
@@ -83,6 +92,8 @@ class SupportTicketController extends Controller
             'status' => 'open',
             'attachments' => $attachments,
         ]);
+
+        \Log::info('Ticket created:', $ticket->toArray());
 
         $ticket->load(['user:id,name,email,avatar']);
 

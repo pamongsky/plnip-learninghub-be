@@ -91,13 +91,13 @@ try {
     // Check for backup files in last 7 days
     $oracleHome = 'C:/oracle/product/19c';
     $dumpDir = "$oracleHome/admin/ORCL/dpdump";
-    
+
     if (is_dir($dumpDir)) {
         $backups = glob("$dumpDir/plnip_backup_*.dmp");
         $recentBackups = array_filter($backups, function($file) {
             return filemtime($file) > strtotime('-7 days');
         });
-        
+
         if (count($recentBackups) > 0) {
             echo "✓ Found " . count($recentBackups) . " backup(s) in last 7 days\n";
             $latest = array_reduce($recentBackups, function($a, $b) {
@@ -124,7 +124,7 @@ echo str_repeat("-", 80) . "\n";
 try {
     $recycleCount = DB::select("SELECT COUNT(*) as cnt FROM RECYCLEBIN");
     echo "Items in recycle bin: {$recycleCount[0]->cnt}\n";
-    
+
     if ($recycleCount[0]->cnt > 0) {
         echo "✓ Recycle Bin is active (can recover dropped tables)\n";
         $passed++;

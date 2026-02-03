@@ -27,45 +27,64 @@ class MoodleAuthController extends Controller
             return response()->json(['success' => false, 'message' => 'Unauthorized'], 401);
         }
 
-        $username = strtolower(explode(' ', $user->name)[0]); // Simple logic
-        // Or if we stored the mapped username, use that.
-        // For 'fahmi', it matches.
-        
         $email = strtolower($user->email);
+        $username = strtolower(str_replace(['@', '.', ' '], ['_', '_', '_'], explode('@', $email)[0]));
         $firstname = explode(' ', $user->name)[0];
         $lastname = count(explode(' ', $user->name)) > 1 ? substr(strstr($user->name, " "), 1) : 'User';
 
-        Log::info("Moodle SSO DirectDB Attempt for: $username");
+        Log::info("Hybrid SSO: Portal user {$user->email} requesting Moodle access");
 
         try {
-            // New Strategy: DIRECT DATABASE ACCESS (Bypass API Block)
-            
-            // 1. Check if user exists in Moodle DB
-            // Prioritize EMAIL check as it's more reliable/unique than guessed username
+            // HYBRID SYSTEM: Portal (Oracle) adalah MASTER
+            // 1. User sudah ada di Portal (dari $request->user())
+            // 2. Cek apakah user sudah di Moodle
             $moodleUser = DB::connection('moodle')->table('user')
                 ->where('email', $email)
+                ->where('deleted', 0)
                 ->first();
 
+            // 3. Kalau belum di Moodle, AUTO CREATE dari data Portal
             if (!$moodleUser) {
-                // Determine if we should create? 
-                // Creating via DB is risky (password hashes etc).
-                // For now, fail gracefully.
-                Log::warning("Moodle User not found in DB via Email: $email");
-                return response()->json([
-                    'success' => false, 
-                    'message' => "User dengan email $email belum terdaftar di Moodle. Silakan hubungi Admin."
-                ], 404);
+                Log::info("User not in Moodle, auto-creating from Portal data: $email");
+
+                // Generate random password (user ga perlu tau, SSO otomatis)
+                $randomPassword = Str::random(32);
+                $hashedPassword = password_hash($randomPassword, PASSWORD_BCRYPT);
+
+                // Create user di Moodle
+                $userId = DB::connection('moodle')->table('user')->insertGetId([
+                    'auth' => 'userkey',
+                    'confirmed' => 1,
+                    'username' => $username,
+                    'password' => $hashedPassword,
+                    'firstname' => $firstname,
+                    'lastname' => $lastname,
+                    'email' => $email,
+                    'emailstop' => 0,
+                    'mailformat' => 1,
+                    'maildigest' => 0,
+                    'maildisplay' => 2,
+                    'autosubscribe' => 1,
+                    'trackforums' => 0,
+                    'timecreated' => now()->timestamp,
+                    'timemodified' => now()->timestamp,
+                    'trustbitmask' => 0,
+                    'imagealt' => '',
+                    'mnethostid' => 1,
+                    'lang' => 'en',
+                    'calendartype' => 'gregorian',
+                ]);
+
+                // Re-fetch user
+                $moodleUser = DB::connection('moodle')->table('user')->where('id', $userId)->first();
+
+                Log::info("User auto-created in Moodle with ID: $userId");
             }
 
-            // 2. Generate Key
+            // 4. Generate Magic Key untuk SSO
             $key = Str::random(32);
-            $validUntil = now()->addMinutes(10)->timestamp; // 10 minutes validity
+            $validUntil = now()->addMinutes(10)->timestamp;
 
-            // 3. Insert Key into mdl_user_private_key
-            // Note: Table prefix 'mdl_' is handled by config usually, 
-            // but if config says 'mdl_', then `table('user_private_key')` becomes `mdl_user_private_key`.
-            // Let's rely on config prefix.
-            
             DB::connection('moodle')->table('user_private_key')->insert([
                 'script' => 'auth/userkey',
                 'value' => $key,
@@ -76,19 +95,25 @@ class MoodleAuthController extends Controller
                 'timecreated' => now()->timestamp
             ]);
 
-            // 4. Construct URL
+            // 5. Construct SSO URL
             $loginUrl = $this->moodleUrl . '/auth/userkey/login.php?key=' . $key;
+
+            Log::info("SSO URL generated for user {$user->email} → Moodle user ID {$moodleUser->id}");
 
             return response()->json([
                 'success' => true,
-                'login_url' => $loginUrl
+                'login_url' => $loginUrl,
+                'message' => 'SSO link generated successfully'
             ]);
 
         } catch (\Exception $e) {
-            Log::error("Moodle DirectDB Error: " . $e->getMessage());
+            Log::error("Hybrid SSO Error for {$user->email}: " . $e->getMessage());
+            Log::error("Stack trace: " . $e->getTraceAsString());
+
             return response()->json([
-                'success' => false, 
-                'message' => 'Database Error: ' . $e->getMessage()
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat akses Moodle. Silakan coba lagi atau hubungi Admin.',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

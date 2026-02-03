@@ -79,12 +79,12 @@ class ChatController extends Controller
 
             if ($request->hasFile('attachment')) {
                 $file = $request->file('attachment');
-                
+
                 // Check storage directory exists
                 if (!file_exists(storage_path('app/public/chat_attachments'))) {
                     mkdir(storage_path('app/public/chat_attachments'), 0755, true);
                 }
-                
+
                 $path = $file->store('chat_attachments', 'public');
 
                 // Save to DB
@@ -98,12 +98,12 @@ class ChatController extends Controller
 
                 // Prepare for Gemini (ONLY IMAGES SUPPORTED)
                 $mimeType = $file->getMimeType();
-                
+
                 // Check if it's an image
                 if (in_array($mimeType, ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'])) {
                     // Send image to Gemini via inline_data
                     $base64Data = base64_encode(file_get_contents($file->getRealPath()));
-                    
+
                     $inlineData = [
                         "mime_type" => $mimeType,
                         "data" => $base64Data
@@ -119,7 +119,7 @@ class ChatController extends Controller
             if (!$hasImageForGemini && !empty($userMessage)) {
                 $startFaqTime = microtime(true);
                 $cacheKey = 'faq_response:' . md5(strtolower(trim($userMessage)));
-                
+
                 // Check cache first
                 $faqMatch = Cache::remember($cacheKey, 3600, function() use ($userMessage) {
                     return AiFaq::searchByKeyword($userMessage);

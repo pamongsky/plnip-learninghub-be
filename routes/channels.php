@@ -39,10 +39,25 @@ Broadcast::channel('class-chat.{classId}', function ($user, $classId) {
 Broadcast::channel('support-ticket.{ticketId}', function ($user, $ticketId) {
     $ticket = \App\Models\SupportTicket::find($ticketId);
     if (!$ticket) {
+        \Log::warning('Broadcasting auth failed: Ticket not found', ['ticket_id' => $ticketId]);
         return false;
     }
+
     // Allow ticket owner, assigned admin, or any admin/super-admin
-    return $user->id === $ticket->user_id
-        || $user->id === $ticket->assigned_to
-        || $user->hasRole(['admin', 'super-admin']);
+    $isOwner = (int) $user->id === (int) $ticket->user_id;
+    $isAssigned = (int) $user->id === (int) $ticket->assigned_to;
+    $isAdmin = $user->hasRole(['admin', 'super-admin']);
+
+    \Log::info('Broadcasting auth check', [
+        'user_id' => $user->id,
+        'ticket_id' => $ticketId,
+        'ticket_user_id' => $ticket->user_id,
+        'assigned_to' => $ticket->assigned_to,
+        'is_owner' => $isOwner,
+        'is_assigned' => $isAssigned,
+        'is_admin' => $isAdmin,
+        'result' => $isOwner || $isAssigned || $isAdmin,
+    ]);
+
+    return $isOwner || $isAssigned || $isAdmin;
 });
