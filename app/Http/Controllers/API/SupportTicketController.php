@@ -110,7 +110,7 @@ class SupportTicketController extends Controller
     public function show(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        
+
         $ticket = SupportTicket::with([
             'user:id,name,email,avatar',
             'assignedAdmin:id,name,avatar',
@@ -197,7 +197,7 @@ class SupportTicketController extends Controller
     public function updateStatus(Request $request, int $id): JsonResponse
     {
         $user = $request->user();
-        
+
         if (!$user->hasRole(['admin', 'Admin', 'super-admin', 'superadmin', 'Super Admin'])) {
             return response()->json([
                 'success' => false,
@@ -210,13 +210,13 @@ class SupportTicketController extends Controller
         ]);
 
         $ticket = SupportTicket::findOrFail($id);
-        
+
         $updateData = ['status' => $validated['status']];
-        
+
         if ($validated['status'] === 'resolved') {
             $updateData['resolved_at'] = now();
         }
-        
+
         if (in_array($validated['status'], ['in_progress', 'resolved']) && !$ticket->assigned_to) {
             $updateData['assigned_to'] = $user->id;
         }
@@ -236,7 +236,7 @@ class SupportTicketController extends Controller
     public function getStats(Request $request): JsonResponse
     {
         $user = $request->user();
-        
+
         if (!$user->hasRole(['admin', 'Admin', 'super-admin', 'superadmin', 'Super Admin'])) {
             return response()->json([
                 'success' => false,

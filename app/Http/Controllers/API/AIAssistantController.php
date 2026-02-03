@@ -19,7 +19,7 @@ class AIAssistantController extends Controller
     public function getContext(Request $request): JsonResponse
     {
         $user = $request->user();
-        
+
         // Build safe context - NO CODE, only menu & features
         $context = [
             'user_info' => [
@@ -50,19 +50,19 @@ class AIAssistantController extends Controller
         ]);
 
         $user = $request->user();
-        
+
         Log::info('AI Chat Request', [
             'user_id' => $user->id,
             'message' => $validated['message'],
             'conversation_id' => $validated['conversation_id'] ?? null,
         ]);
-        
+
         try {
             // Get user context
             $context = $this->buildUserContext($user);
-            
+
             Log::info('User context built', ['features_count' => count($context['available_features'])]);
-            
+
             // If asking about course content, include it
             $courseContext = null;
             if (isset($validated['course_id'])) {
@@ -71,17 +71,17 @@ class AIAssistantController extends Controller
                         $query->where('user_id', $user->id);
                     })
                     ->first();
-                    
+
                 if ($course) {
                     $courseContext = $this->getMoodleCourseContent($course);
                 }
             }
-            
+
             // Call Gemini API
             $response = $this->callGeminiAPI($validated['message'], $context, $courseContext);
-            
+
             Log::info('Gemini API response received', ['response_length' => strlen($response)]);
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -89,12 +89,12 @@ class AIAssistantController extends Controller
                     'timestamp' => now()->toIso8601String(),
                 ],
             ]);
-            
+
         } catch (\Exception $e) {
             Log::error('AI Assistant error: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Maaf, AI assistant sedang mengalami gangguan. Silakan coba lagi.',
@@ -109,14 +109,14 @@ class AIAssistantController extends Controller
     public function getCourseContent(Request $request, int $courseId): JsonResponse
     {
         $user = $request->user();
-        
+
         // Check if user enrolled in course
         $course = Course::where('id', $courseId)
             ->whereHas('enrollments', function($query) use ($user) {
                 $query->where('user_id', $user->id);
             })
             ->first();
-            
+
         if (!$course) {
             return response()->json([
                 'success' => false,
@@ -126,7 +126,7 @@ class AIAssistantController extends Controller
 
         // Get course content from Moodle
         $content = $this->getMoodleCourseContent($course);
-        
+
         return response()->json([
             'success' => true,
             'data' => $content,
@@ -295,7 +295,7 @@ class AIAssistantController extends Controller
     private function callGeminiAPI(string $userMessage, array $context, ?array $courseContext = null): string
     {
         $apiKey = config('services.gemini.api_key');
-        
+
         if (!$apiKey) {
             Log::error('Gemini API key not configured');
             throw new \Exception('Gemini API key not configured');
@@ -307,7 +307,7 @@ class AIAssistantController extends Controller
         $systemPrompt = "Anda adalah AI assistant untuk {$context['platform_name']}.\n\n";
         $systemPrompt .= "User role: {$context['user_role']}\n\n";
         $systemPrompt .= "Fitur yang tersedia:\n";
-        
+
         foreach ($context['available_features'] as $feature) {
             $systemPrompt .= "- {$feature['name']}: {$feature['description']}\n";
             if (isset($feature['how_to'])) {
@@ -317,19 +317,19 @@ class AIAssistantController extends Controller
                 }
             }
         }
-        
+
         // Add course content if provided
         if ($courseContext && !isset($courseContext['error'])) {
             $systemPrompt .= "\n=== MATERI PEMBELAJARAN ===\n";
             $systemPrompt .= "Kelas: {$courseContext['course_name']}\n";
             $systemPrompt .= "Deskripsi: {$courseContext['description']}\n\n";
-            
+
             foreach ($courseContext['sections'] ?? [] as $section) {
                 $systemPrompt .= "## {$section['name']}\n";
                 if (!empty($section['summary'])) {
                     $systemPrompt .= "{$section['summary']}\n\n";
                 }
-                
+
                 foreach ($section['modules'] ?? [] as $module) {
                     $systemPrompt .= "### {$module['name']}\n";
                     if (!empty($module['description'])) {
@@ -342,15 +342,15 @@ class AIAssistantController extends Controller
                     }
                 }
             }
-            
+
             $systemPrompt .= "Gunakan materi di atas untuk menjawab pertanyaan user tentang pembelajaran.\n";
         }
-        
+
         $systemPrompt .= "\nPanduan:\n";
         foreach ($context['guidelines'] as $guideline) {
             $systemPrompt .= "- {$guideline}\n";
         }
-        
+
         $systemPrompt .= "\nJawab dengan lengkap, detail, dan ramah. Jika user tanya tentang fitur, jelaskan step-by-step.";
 
         Log::info('Calling Gemini API...', ['prompt_length' => strlen($systemPrompt)]);
@@ -396,13 +396,13 @@ class AIAssistantController extends Controller
         }
 
         $data = $response->json();
-        
+
         Log::info('Gemini API raw response', ['data' => $data]);
-        
+
         $aiResponse = $data['candidates'][0]['content']['parts'][0]['text'] ?? 'Maaf, tidak ada respons dari AI.';
-        
+
         Log::info('Extracted AI response', ['response' => $aiResponse]);
-        
+
         return $aiResponse;
     }
 
@@ -413,7 +413,7 @@ class AIAssistantController extends Controller
     {
         $moodleUrl = config('services.moodle.url');
         $token = config('services.moodle.token');
-        
+
         if (!$moodleUrl || !$token) {
             return [
                 'course_name' => $course->name,
@@ -436,7 +436,7 @@ class AIAssistantController extends Controller
             }
 
             $sections = $response->json();
-            
+
             // Extract readable content
             $content = [
                 'course_name' => $course->name,
@@ -468,7 +468,7 @@ class AIAssistantController extends Controller
                             if (isset($module['contents'][0]['fileurl'])) {
                                 $fileUrl = $module['contents'][0]['fileurl'] . "&token={$token}";
                                 $fileName = $module['contents'][0]['filename'] ?? '';
-                                
+
                                 // Try to extract text from PDF
                                 if (str_ends_with(strtolower($fileName), '.pdf')) {
                                     $pdfText = $this->extractPDFText($fileUrl);
@@ -516,7 +516,7 @@ class AIAssistantController extends Controller
 
         } catch (\Exception $e) {
             Log::error('Failed to fetch Moodle content: ' . $e->getMessage());
-            
+
             return [
                 'course_name' => $course->name,
                 'description' => $course->description,
@@ -533,7 +533,7 @@ class AIAssistantController extends Controller
         try {
             // Download PDF temporarily
             $pdfContent = file_get_contents($pdfUrl);
-            
+
             if (!$pdfContent) {
                 return null;
             }

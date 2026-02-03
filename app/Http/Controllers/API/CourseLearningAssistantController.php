@@ -19,14 +19,14 @@ class CourseLearningAssistantController extends Controller
     public function getCourseStructure(Request $request, int $courseId): JsonResponse
     {
         $user = $request->user();
-        
+
         // Check enrollment
         $course = Course::where('id', $courseId)
             ->whereHas('enrollments', function($query) use ($user) {
                 $query->where('user_id', $user->id);
             })
             ->first();
-            
+
         if (!$course) {
             return response()->json([
                 'success' => false,
@@ -35,7 +35,7 @@ class CourseLearningAssistantController extends Controller
         }
 
         $structure = $this->fetchMoodleCourseStructure($course);
-        
+
         return response()->json([
             'success' => true,
             'data' => $structure,
@@ -55,14 +55,14 @@ class CourseLearningAssistantController extends Controller
         ]);
 
         $user = $request->user();
-        
+
         // Check enrollment
         $course = Course::where('id', $validated['course_id'])
             ->whereHas('enrollments', function($query) use ($user) {
                 $query->where('user_id', $user->id);
             })
             ->first();
-            
+
         if (!$course) {
             return response()->json([
                 'success' => false,
@@ -75,7 +75,7 @@ class CourseLearningAssistantController extends Controller
             $validated['module_id'],
             $validated['module_type']
         );
-        
+
         return response()->json([
             'success' => true,
             'data' => $content,
@@ -95,14 +95,14 @@ class CourseLearningAssistantController extends Controller
         ]);
 
         $user = $request->user();
-        
+
         // Check enrollment
         $course = Course::where('id', $validated['course_id'])
             ->whereHas('enrollments', function($query) use ($user) {
                 $query->where('user_id', $user->id);
             })
             ->first();
-            
+
         if (!$course) {
             return response()->json([
                 'success' => false,
@@ -113,19 +113,19 @@ class CourseLearningAssistantController extends Controller
         try {
             // Get course structure
             $structure = $this->fetchMoodleCourseStructure($course);
-            
+
             // Filter by section if specified
             $relevantContent = $structure;
             if (!empty($validated['section_name'])) {
                 $relevantContent = $this->filterBySection($structure, $validated['section_name']);
             }
-            
+
             // Build context for AI
             $context = $this->buildLearningContext($course, $relevantContent);
-            
+
             // Call Gemini to answer
             $response = $this->askGemini($validated['message'], $context);
-            
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -135,10 +135,10 @@ class CourseLearningAssistantController extends Controller
                     'timestamp' => now()->toIso8601String(),
                 ],
             ]);
-            
+
         } catch (\Exception $e) {
             Log::error('Course AI chat error: ' . $e->getMessage());
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal memproses pertanyaan. Silakan coba lagi.',
@@ -153,7 +153,7 @@ class CourseLearningAssistantController extends Controller
     {
         $moodleUrl = config('services.moodle.url');
         $token = config('services.moodle.token');
-        
+
         if (!$moodleUrl || !$token || !$course->moodle_course_id) {
             return ['error' => 'Moodle not configured'];
         }
@@ -171,7 +171,7 @@ class CourseLearningAssistantController extends Controller
             }
 
             $sections = $response->json();
-            
+
             return [
                 'course_id' => $course->id,
                 'course_name' => $course->name,
@@ -323,7 +323,7 @@ class CourseLearningAssistantController extends Controller
     {
         try {
             $pdfContent = file_get_contents($pdfUrl);
-            
+
             if (!$pdfContent) {
                 return "Failed to download PDF";
             }
@@ -339,7 +339,7 @@ class CourseLearningAssistantController extends Controller
 
             // Clean up text
             $text = preg_replace('/\s+/', ' ', $text);
-            
+
             return trim($text);
 
         } catch (\Exception $e) {
@@ -382,7 +382,7 @@ class CourseLearningAssistantController extends Controller
         $filtered['sections'] = array_filter($structure['sections'] ?? [], function($section) use ($sectionName) {
             return stripos($section['name'], $sectionName) !== false;
         });
-        
+
         return $filtered;
     }
 
@@ -401,7 +401,7 @@ class CourseLearningAssistantController extends Controller
             if (!empty($section['summary'])) {
                 $context .= "{$section['summary']}\n";
             }
-            
+
             $context .= "Materi:\n";
             foreach ($section['modules'] as $module) {
                 $context .= "- {$module['icon']} {$module['name']} ({$module['type_label']})\n";
@@ -421,7 +421,7 @@ class CourseLearningAssistantController extends Controller
     private function askGemini(string $question, string $context): string
     {
         $apiKey = config('services.gemini.api_key');
-        
+
         if (!$apiKey) {
             throw new \Exception('Gemini API key not configured');
         }
