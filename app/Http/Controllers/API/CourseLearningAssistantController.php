@@ -432,8 +432,10 @@ class CourseLearningAssistantController extends Controller
         $systemPrompt .= "Jelaskan dengan bahasa yang mudah dipahami.\n";
         $systemPrompt .= "Jika pertanyaan di luar materi yang tersedia, katakan dengan jelas.\n";
 
-        $response = Http::timeout(30)->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={$apiKey}",
+        $response = Http::timeout(30)
+            ->withoutVerifying() // Disable SSL verification for development
+            ->post(
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}",
             [
                 'contents' => [
                     [

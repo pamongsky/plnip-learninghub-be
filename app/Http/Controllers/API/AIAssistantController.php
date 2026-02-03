@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
 use App\Models\Course;
+use App\Models\AiConversation;
 
 class AIAssistantController extends Controller
 {
@@ -51,13 +52,27 @@ class AIAssistantController extends Controller
 
         $user = $request->user();
 
+        // Generate conversation ID if not provided
+        $conversationId = $validated['conversation_id'] ?? 'conv-' . uniqid() . time();
+
         Log::info('AI Chat Request', [
             'user_id' => $user->id,
             'message' => $validated['message'],
-            'conversation_id' => $validated['conversation_id'] ?? null,
+            'conversation_id' => $conversationId,
         ]);
 
         try {
+            // Save user message
+            AiConversation::create([
+                'conversation_id' => $conversationId,
+                'user_id' => $user->id,
+                'message' => $validated['message'],
+                'role' => 'user',
+            ]);
+
+            // Get conversation history (last 10 messages)
+            $history = AiConversation::getHistory($conversationId, 10);
+
             // Get user context
             $context = $this->buildUserContext($user);
 
@@ -77,8 +92,16 @@ class AIAssistantController extends Controller
                 }
             }
 
-            // Call Gemini API
-            $response = $this->callGeminiAPI($validated['message'], $context, $courseContext);
+            // Call Gemini API with history
+            $response = $this->callGeminiAPI($validated['message'], $context, $courseContext, $history);
+
+            // Save assistant response
+            AiConversation::create([
+                'conversation_id' => $conversationId,
+                'user_id' => $user->id,
+                'message' => $response,
+                'role' => 'assistant',
+            ]);
 
             Log::info('Gemini API response received', ['response_length' => strlen($response)]);
 
@@ -86,6 +109,7 @@ class AIAssistantController extends Controller
                 'success' => true,
                 'data' => [
                     'response' => $response,
+                    'conversation_id' => $conversationId,
                     'timestamp' => now()->toIso8601String(),
                 ],
             ]);
@@ -144,10 +168,12 @@ class AIAssistantController extends Controller
             'available_features' => $this->getAvailableFeatures($user),
             'navigation' => $this->getNavigationMenu($user),
             'guidelines' => [
-                'Bantu user dengan ramah dan profesional',
-                'Jelaskan fitur berdasarkan menu yang tersedia',
-                'Jika user tanya cara pakai fitur, tunjukkan langkah-langkahnya',
-                'Jika tidak tahu jawaban, arahkan ke support ticket',
+                'Bantu user dengan SEMUA pertanyaan terkait pembelajaran PLN IP (kelistrikan, teknik, perhitungan, dll)',
+                'Jelaskan konsep teknis kelistrikan dengan detail, rumus, dan contoh praktis',
+                'Bantu user navigasi dan menggunakan fitur platform',
+                'Jawab dalam bahasa Indonesia yang mudah dipahami',
+                'Gunakan rumus matematika dan perhitungan jika dibutuhkan',
+                'Jika pertanyaan sangat spesifik/kompleks, sarankan buat support ticket atau tanya instructor',
                 'JANGAN pernah tampilkan atau bahas source code',
                 'JANGAN akses atau bahas database/API internal',
             ],
@@ -292,7 +318,7 @@ class AIAssistantController extends Controller
     /**
      * Call Gemini API with safe context
      */
-    private function callGeminiAPI(string $userMessage, array $context, ?array $courseContext = null): string
+    private function callGeminiAPI(string $userMessage, array $context, ?array $courseContext = null, $history = null): string
     {
         $apiKey = config('services.gemini.api_key');
 
@@ -305,6 +331,10 @@ class AIAssistantController extends Controller
 
         // Build system prompt with context
         $systemPrompt = "Anda adalah AI assistant untuk {$context['platform_name']}.\n\n";
+        $systemPrompt .= "Tugas Anda:\n";
+        $systemPrompt .= "1. Membantu user memahami materi pembelajaran PLN IP (kelistrikan, teknik, perhitungan, dll)\n";
+        $systemPrompt .= "2. Menjawab pertanyaan teknis dengan detail, rumus, dan contoh\n";
+        $systemPrompt .= "3. Membantu navigasi dan penggunaan fitur platform\n\n";
         $systemPrompt .= "User role: {$context['user_role']}\n\n";
         $systemPrompt .= "Fitur yang tersedia:\n";
 
@@ -355,30 +385,49 @@ class AIAssistantController extends Controller
 
         Log::info('Calling Gemini API...', ['prompt_length' => strlen($systemPrompt)]);
 
-        // Call Gemini API
-        $response = Http::timeout(30)->withHeaders([
-            'Content-Type' => 'application/json',
-        ])->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={$apiKey}", [
-            'contents' => [
-                [
-                    'role' => 'user',
-                    'parts' => [
-                        ['text' => $systemPrompt],
-                    ],
-                ],
-                [
-                    'role' => 'model',
-                    'parts' => [
-                        ['text' => 'Baik, saya siap membantu sebagai AI assistant. Saya akan membantu user dengan ramah dan hanya membahas fitur yang tersedia, tanpa mengakses code atau data sensitif.'],
-                    ],
-                ],
-                [
-                    'role' => 'user',
-                    'parts' => [
-                        ['text' => $userMessage],
-                    ],
+        // Build conversation contents with history
+        $contents = [
+            [
+                'role' => 'user',
+                'parts' => [
+                    ['text' => $systemPrompt],
                 ],
             ],
+            [
+                'role' => 'model',
+                'parts' => [
+                    ['text' => 'Baik, saya siap membantu. Saya akan membantu dengan materi pembelajaran PLN IP (termasuk perhitungan kelistrikan, teknik, dll) dan juga navigasi platform.'],
+                ],
+            ],
+        ];
+
+        // Add conversation history if exists
+        if ($history && count($history) > 0) {
+            foreach ($history as $msg) {
+                $contents[] = [
+                    'role' => $msg->role === 'user' ? 'user' : 'model',
+                    'parts' => [
+                        ['text' => $msg->message],
+                    ],
+                ];
+            }
+        }
+
+        // Add current user message
+        $contents[] = [
+            'role' => 'user',
+            'parts' => [
+                ['text' => $userMessage],
+            ],
+        ];
+
+        // Call Gemini API
+        $response = Http::timeout(30)
+            ->withoutVerifying() // Disable SSL verification for development
+            ->withHeaders([
+                'Content-Type' => 'application/json',
+            ])->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}", [
+            'contents' => $contents,
             'generationConfig' => [
                 'temperature' => 0.7,
                 'topK' => 40,
