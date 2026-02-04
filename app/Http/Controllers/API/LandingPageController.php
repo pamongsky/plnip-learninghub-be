@@ -9,6 +9,7 @@ use App\Models\LandingPageSetting;
 use App\Models\CmsHeroImage;
 use App\Models\CmsLeader;
 use App\Models\CmsPartner;
+use App\Models\CmsLoginBackground;
 use Illuminate\Support\Facades\Storage;
 
 class LandingPageController extends Controller
@@ -21,6 +22,7 @@ class LandingPageController extends Controller
         return response()->json([
             'settings' => LandingPageSetting::all()->pluck('value', 'key'),
             'hero_images' => CmsHeroImage::orderBy('order')->get(),
+            'login_backgrounds' => CmsLoginBackground::orderBy('order')->get(),
             'leaders' => CmsLeader::orderBy('order')->get(),
             'partners' => CmsPartner::all(),
         ]);
@@ -171,6 +173,34 @@ class LandingPageController extends Controller
     public function deletePartner(CmsPartner $partner): JsonResponse
     {
         $partner->delete();
+        return response()->json(['message' => 'Deleted']);
+    }
+
+    /**
+     * Login Background Images CRUD
+     */
+    public function storeLoginBackground(Request $request): JsonResponse
+    {
+        $request->validate([
+            'image' => 'required|image|max:2048',
+            'title' => 'nullable|string',
+            'order' => 'integer',
+        ]);
+
+        $path = $request->file('image')->store('cms/login', 'public');
+
+        $background = CmsLoginBackground::create([
+            'image_path' => asset('storage/' . $path),
+            'title' => $request->title,
+            'order' => $request->order ?? 0,
+        ]);
+
+        return response()->json($background, 201);
+    }
+
+    public function deleteLoginBackground(CmsLoginBackground $loginBackground): JsonResponse
+    {
+        $loginBackground->delete();
         return response()->json(['message' => 'Deleted']);
     }
 }

@@ -13,12 +13,13 @@ use Illuminate\Support\Facades\DB;
 class UserController extends \App\Http\Controllers\Controller
 {
     /**
-     * Get list of users (untuk selection dropdowns)
+     * Get list of users (untuk selection dropdowns & enrollment search)
      */
     public function index(Request $request)
     {
-        $query = User::select('id', 'name', 'email', 'employee_id');
+        $query = User::select('id', 'name', 'email', 'employee_id', 'department', 'position');
 
+        // Search by name, email, atau employee_id
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -28,13 +29,26 @@ class UserController extends \App\Http\Controllers\Controller
             });
         }
 
-        $users = $query->orderBy('name')->limit(50)->get();
+        // Filter by role (untuk cari instructor vs student)
+        if ($request->has('role')) {
+            $role = $request->role;
+            $query->whereHas('roles', function($q) use ($role) {
+                $q->where('name', $role);
+            });
+        }
+
+        // Filter by status (hanya active users)
+        if ($request->has('active_only') && $request->active_only) {
+            $query->where('is_active', true);
+        }
+
+        $users = $query->orderBy('name')->paginate($request->get('per_page', 50));
 
         return response()->json($users);
     }
 
     /**
-     * Get all users dengan filter (untuk super admin panel)
+     * Get all users dengan filter (untuk admin panel)
      */
     public function getAllUsers(Request $request): JsonResponse
     {
@@ -89,15 +103,33 @@ class UserController extends \App\Http\Controllers\Controller
         // Load roles untuk efficient queries
         $query->with('roles');
 
-        $users = $query->paginate($request->get('per_page', 15));
+        // Get all users tanpa pagination (untuk view admin)
+        $users = $query->get();
 
-        // Add effective role to each user
-        $users->getCollection()->transform(function ($user) {
-            $user->effective_role = UserService::getEffectiveRole($user);
-            return $user;
+        // Add role_name dan status mapping
+        $users = $users->map(function ($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'employee_id' => $user->employee_id,
+                'department' => $user->department ?? 'N/A',
+                'position' => $user->position ?? 'N/A',
+                'role' => $user->roles->pluck('name')->first() ?? 'user',
+                'effective_role' => $user->role_override ?? ($user->roles->pluck('name')->first() ?? 'user'),
+                'is_active' => (bool) $user->is_active,
+                'source' => $user->source ?? 'manual',
+                'access_group' => $user->access_group,
+                'role_override' => $user->role_override,
+                'created_at' => $user->created_at->toISOString(),
+            ];
         });
 
-        return response()->json($users);
+        return response()->json([
+            'success' => true,
+            'data' => $users,
+            'total' => $users->count(),
+        ]);
     }
 
     /**
@@ -169,11 +201,10 @@ class UserController extends \App\Http\Controllers\Controller
      */
     public function update(Request $request, User $user): JsonResponse
     {
-        // Check permission: hanya super admin atau admin yang manage unit yang sama
-        if (!$request->user() || !($request->user()->hasRole('super-admin') ||
-            ($request->user()->hasRole('admin') && $request->user()->department === $user->department))) {
+        // Check permission: HANYA super admin yang bisa edit user
+        if (!$request->user() || !$request->user()->hasRole('super-admin')) {
             return response()->json([
-                'message' => 'Anda tidak memiliki izin untuk mengubah user ini'
+                'message' => 'Hanya super admin yang bisa mengubah data user'
             ], 403);
         }
 

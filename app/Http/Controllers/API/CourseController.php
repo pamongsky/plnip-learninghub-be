@@ -23,7 +23,7 @@ class CourseController extends Controller
     /**
      * List all courses with enrollment counts
      */
-    public function index()
+    public function index(Request $request)
     {
         $courses = Course::withCount('enrollments')
             ->with('instructor:id,name,avatar')
@@ -49,7 +49,7 @@ class CourseController extends Controller
                 // Determine Moodle URL for direct access
                 // Format: http://moodle-url/course/view.php?id=MOODLE_COURSE_ID
                 $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
-                $course->moodle_url = $course->moodle_course_id 
+                $course->moodle_url = $course->moodle_course_id
                     ? "{$moodleBase}/course/view.php?id={$course->moodle_course_id}"
                     : null;
                 return $course;
@@ -68,6 +68,13 @@ class CourseController extends Controller
      */
     public function sync(Request $request)
     {
+        // Permission check: Super admin dan Admin bisa sync
+        if (!$request->user() || !$request->user()->hasRole(['super-admin', 'admin'])) {
+            return response()->json([
+                'message' => 'Hanya admin yang bisa sync courses dari Moodle'
+            ], 403);
+        }
+
         try {
             DB::beginTransaction();
 
@@ -79,12 +86,12 @@ class CourseController extends Controller
             $moodleCourses = DB::connection('moodle')->table('course')
                 ->where('id', '!=', 1)
                 ->get();
-            
+
             foreach ($moodleCourses as $mCourse) {
                 // Map fields
                 // Oracle usually returns lowercase keys if configured, but check case
                 // We assume standard Laravel-OCI behavior (lowercase)
-                
+
                 Course::updateOrCreate(
                     ['moodle_course_id' => $mCourse->id],
                     [
@@ -94,14 +101,14 @@ class CourseController extends Controller
                         'category_id' => $mCourse->category ?? 1,
                         'start_date' => ($mCourse->startdate > 0) ? date('Y-m-d', $mCourse->startdate) : null,
                         'end_date' => ($mCourse->enddate > 0) ? date('Y-m-d', $mCourse->enddate) : null,
-                        'is_active' => ($mCourse->visible == 1), 
+                        'is_active' => ($mCourse->visible == 1),
                     ]
                 );
                 $syncedCount++;
             }
 
             // 2. Deactivate courses in Portal that are deleted/hidden in Moodle?
-            // For now, let's just sync additions/updates. 
+            // For now, let's just sync additions/updates.
             // Full sync might require checking diffs.
 
             DB::commit();
@@ -125,11 +132,12 @@ class CourseController extends Controller
     public function show($id)
     {
         $course = Course::with([
-            'instructor:id,name,avatar', 
+            'instructor:id,name,avatar',
             'enrollments.user:id,name,email,avatar,department',
-            'students' // Add this
+            'students', // Add this
+            'certificateTemplate:id,name,category,preview_path'
         ])->findOrFail($id);
-        
+
         return response()->json($course);
     }
 
@@ -147,15 +155,21 @@ class CourseController extends Controller
             'end_date' => 'nullable|date',
             'is_active' => 'boolean',
             'instructor_id' => 'nullable|exists:users,id',
+            'certificate_template_id' => 'nullable|exists:certificate_templates,id',
+            'passing_grade' => 'nullable|numeric|min:0|max:100',
+            'certificate_criteria' => 'nullable|in:final_grade,specific_quiz,completion_and_grade',
+            'certificate_quiz_id' => 'nullable|integer',
+            'auto_issue_certificate' => 'nullable|boolean',
+            'certificate_issue_delay_days' => 'nullable|integer|min:0',
         ]);
 
-        // Note: For now we only update local DB. 
+        // Note: For now we only update local DB.
         // Moodle update logic can be added later if needed.
         $course->update($validated);
 
         return response()->json([
             'message' => 'Kelas berhasil diperbarui',
-            'data' => $course
+            'data' => $course->load('certificateTemplate')
         ]);
     }
 
@@ -166,8 +180,16 @@ class CourseController extends Controller
     {
         $request->validate([
             'user_id' => 'required|exists:users,id',
-            'role_id' => 'integer' // 5 = student, 3 = teacher
+            'role_id' => 'integer' // 5 = student, 3 = teacher/instructor
         ]);
+
+        // Permission check: Admin bisa enroll user
+        $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->hasRole(['super-admin', 'admin'])) {
+            return response()->json([
+                'message' => 'Hanya admin yang bisa enroll user ke course'
+            ], 403);
+        }
 
         try {
             DB::beginTransaction();
@@ -183,11 +205,29 @@ class CourseController extends Controller
             // --- MOODLE DIRECT DB SYNC ---
             if ($course->moodle_course_id) {
                 $moodleConn = DB::connection('moodle');
-                
-                // 1. Find Moodle User ID (by Email)
+
+                // 1. Find or CREATE Moodle User (Hybrid System)
                 $moodleUser = $moodleConn->table('user')->where('email', $user->email)->first();
+
                 if (!$moodleUser) {
-                    throw new \Exception("User Moodle tidak ditemukan untuk email: {$user->email}");
+                    // Auto-create user in Moodle if not exists
+                    Log::info("Creating Moodle user for: {$user->email}");
+
+                    $moodleUserId = $moodleConn->table('user')->insertGetId([
+                        'auth' => 'manual',
+                        'confirmed' => 1,
+                        'username' => strtolower(str_replace(['@', '.'], ['_', '_'], $user->email)), // email tanpa @ dan .
+                        'password' => password_hash($user->employee_id ?? 'password123', PASSWORD_BCRYPT), // temporary password
+                        'firstname' => explode(' ', $user->name)[0] ?? $user->name,
+                        'lastname' => substr($user->name, strpos($user->name, ' ') + 1) ?: '-',
+                        'email' => $user->email,
+                        'mnethostid' => 1,
+                        'timecreated' => now()->timestamp,
+                        'timemodified' => now()->timestamp,
+                    ]);
+
+                    $moodleUser = $moodleConn->table('user')->where('id', $moodleUserId)->first();
+                    Log::info("Moodle user created with ID: {$moodleUserId}");
                 }
 
                 // 2. Find Course Context (contextlevel = 50 for Course)
@@ -195,7 +235,7 @@ class CourseController extends Controller
                     ->where('contextlevel', 50)
                     ->where('instanceid', $course->moodle_course_id)
                     ->first();
-                
+
                 if (!$context) {
                     // Try to generate? No, simpler to fail.
                      throw new \Exception("Moodle Context not found for Course ID: {$course->moodle_course_id}");
@@ -233,9 +273,29 @@ class CourseController extends Controller
                 }
 
                 // 5. Insert into mdl_role_assignments (The "Student" label)
-                // Role ID 5 = Student (Standard Moodle)
-                $roleId = $request->input('role_id', 5); 
-                
+                // Role ID mapping:
+                // 1 = Manager (Super Admin)
+                // 2 = Course Creator (Admin)
+                // 3 = Non-Editing Teacher
+                // 4 = Editing Teacher
+                // 5 = Student
+
+                // Auto-map Portal role to Moodle role if not explicitly provided
+                $roleId = $request->input('role_id');
+
+                if (!$roleId) {
+                    // Check user's Portal role and auto-map
+                    if ($user->hasRole('super_admin')) {
+                        $roleId = 1; // Manager in Moodle
+                    } elseif ($user->hasRole('admin')) {
+                        $roleId = 2; // Course Creator in Moodle
+                    } elseif ($user->hasRole('instructor')) {
+                        $roleId = 4; // Editing Teacher in Moodle
+                    } else {
+                        $roleId = 5; // Student (default)
+                    }
+                }
+
                 $existingRole = $moodleConn->table('role_assignments')
                     ->where('contextid', $context->id)
                     ->where('userid', $moodleUser->id)
@@ -259,7 +319,7 @@ class CourseController extends Controller
             $enrollment = CourseEnrollment::create([
                 'course_id' => $course->id,
                 'user_id' => $user->id,
-                'moodle_role_id' => $request->input('role_id', 5),
+                'moodle_role_id' => $roleId, // Use the mapped role ID
                 'status' => 'active',
                 'enrolled_at' => now(),
             ]);
@@ -283,12 +343,16 @@ class CourseController extends Controller
     /**
      * Unenroll/Suspend user
      */
-    public function unenrollUser($id, $userId)
+    public function unenrollUser(Request $request, $id, $userId)
     {
-        // For now, we just delete the local record or set status to suspended
-        // Real unenroll in Moodle API is different function.
-        // Let's soft delete (set suspended)
-        
+        // Permission check: Admin bisa unenroll
+        $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->hasRole(['super-admin', 'admin'])) {
+            return response()->json([
+                'message' => 'Hanya admin yang bisa unenroll user dari course'
+            ], 403);
+        }
+
         $enrollment = CourseEnrollment::where('course_id', $id)
             ->where('user_id', $userId)
             ->firstOrFail();
@@ -296,5 +360,44 @@ class CourseController extends Controller
         $enrollment->update(['status' => 'suspended']);
 
         return response()->json(['message' => 'User berhasil disuspend dari kelas']);
+    }
+
+    /**
+     * Get enrollment tracking (Super Admin: all, Admin: dept only)
+     */
+    public function getEnrollmentTracking(Request $request)
+    {
+        $currentUser = $request->user();
+
+        // Permission check
+        if (!$currentUser || !$currentUser->hasRole(['super-admin', 'admin'])) {
+            return response()->json([
+                'message' => 'Anda tidak memiliki akses'
+            ], 403);
+        }
+
+        $query = CourseEnrollment::with(['user:id,name,email,department', 'course:id,title,short_name'])
+            ->orderBy('created_at', 'desc');
+
+        // Admin hanya lihat enrollment dari dept-nya
+        if ($currentUser->hasRole('admin') && !$currentUser->hasRole('super-admin')) {
+            $query->whereHas('user', function($q) use ($currentUser) {
+                $q->where('department', $currentUser->department);
+            });
+        }
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter by course
+        if ($request->has('course_id')) {
+            $query->where('course_id', $request->course_id);
+        }
+
+        $enrollments = $query->paginate($request->get('per_page', 20));
+
+        return response()->json($enrollments);
     }
 }

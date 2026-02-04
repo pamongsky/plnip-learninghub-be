@@ -78,8 +78,21 @@ class MoodleAuthController extends Controller
                 // Re-fetch user
                 $moodleUser = DB::connection('moodle')->table('user')->where('id', $userId)->first();
 
-                Log::info("User auto-created in Moodle with ID: $userId");
+                // UPDATE Portal user dengan moodle_user_id (HYBRID SYNC)
+                $user->update(['moodle_user_id' => $userId]);
+                Log::info("User auto-created in Moodle with ID: $userId, Portal user updated");
+
+                // AUTO-ASSIGN MOODLE ROLE based on Portal role
+                $this->assignMoodleRole($user, $moodleUser->id);
+
+            } elseif (!$user->moodle_user_id) {
+                // User ada di Moodle tapi Portal belum punya link, update Portal
+                $user->update(['moodle_user_id' => $moodleUser->id]);
+                Log::info("Portal user linked to existing Moodle user ID: {$moodleUser->id}");
             }
+
+            // Ensure role is assigned (even for existing users)
+            $this->ensureMoodleRoleAssigned($user, $moodleUser->id);
 
             // 4. Generate Magic Key untuk SSO
             $key = Str::random(32);
@@ -115,6 +128,106 @@ class MoodleAuthController extends Controller
                 'message' => 'Terjadi kesalahan saat akses Moodle. Silakan coba lagi atau hubungi Admin.',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Assign Moodle role based on Portal role
+     */
+    private function assignMoodleRole($portalUser, $moodleUserId)
+    {
+        // Get system context (context_level = 10)
+        $systemContext = DB::connection('moodle')
+            ->table('context')
+            ->where('contextlevel', 10)
+            ->first();
+
+        if (!$systemContext) {
+            Log::warning("System context not found in Moodle");
+            return;
+        }
+
+        // Role mapping: Portal role → Moodle role
+        $roleMap = [
+            'super-admin' => 1,  // Manager/Site Administrator
+            'admin' => 1,        // Manager
+            'instructor' => 3,   // Editing Teacher
+            'employee' => 5,     // Student
+        ];
+
+        // Get Portal user's role
+        $portalRole = $portalUser->getRoleNames()->first();
+        $moodleRoleId = $roleMap[$portalRole] ?? 5; // Default: Student
+
+        // Check if already assigned
+        $existing = DB::connection('moodle')
+            ->table('role_assignments')
+            ->where('roleid', $moodleRoleId)
+            ->where('userid', $moodleUserId)
+            ->where('contextid', $systemContext->id)
+            ->exists();
+
+        if (!$existing) {
+            DB::connection('moodle')->table('role_assignments')->insert([
+                'roleid' => $moodleRoleId,
+                'contextid' => $systemContext->id,
+                'userid' => $moodleUserId,
+                'timemodified' => now()->timestamp,
+                'modifierid' => 2, // Admin
+                'component' => ' ', // Oracle Moodle uses space, not NULL or empty string
+                'itemid' => 0,
+                'sortorder' => 0,
+            ]);
+
+            Log::info("Assigned Moodle role {$moodleRoleId} ({$portalRole}) to user {$moodleUserId}");
+        }
+
+        // If super-admin, add to siteadmins config
+        if ($portalRole === 'super-admin') {
+            $this->addToSiteAdmins($moodleUserId);
+        }
+    }
+
+    /**
+     * Ensure existing user has correct role
+     */
+    private function ensureMoodleRoleAssigned($portalUser, $moodleUserId)
+    {
+        $this->assignMoodleRole($portalUser, $moodleUserId);
+    }
+
+    /**
+     * Add user to Moodle Site Administrators
+     */
+    private function addToSiteAdmins($moodleUserId)
+    {
+        // Get current siteadmins config
+        $config = DB::connection('moodle')
+            ->table('config')
+            ->where('name', 'siteadmins')
+            ->first();
+
+        if (!$config) {
+            // Create if not exists
+            DB::connection('moodle')->table('config')->insert([
+                'name' => 'siteadmins',
+                'value' => (string)$moodleUserId,
+            ]);
+            Log::info("Created siteadmins config with user {$moodleUserId}");
+        } else {
+            $adminIds = array_filter(explode(',', $config->value));
+
+            if (!in_array($moodleUserId, $adminIds)) {
+                $adminIds[] = $moodleUserId;
+                $newValue = implode(',', $adminIds);
+
+                DB::connection('moodle')
+                    ->table('config')
+                    ->where('name', 'siteadmins')
+                    ->update(['value' => $newValue]);
+
+                Log::info("Added user {$moodleUserId} to siteadmins: {$newValue}");
+            }
         }
     }
 }

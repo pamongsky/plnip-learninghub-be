@@ -57,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Dashboard
     Route::get('/users', [\App\Http\Controllers\API\UserController::class, 'index']);
+    Route::get('/users/all', [\App\Http\Controllers\API\UserController::class, 'getAllUsers']); // For admin view (read-only)
     Route::get('/dashboard/employee', [DashboardController::class, 'employeeDashboard']);
     Route::get('/dashboard/instructor', [DashboardController::class, 'instructorDashboard']);
     Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
@@ -203,6 +204,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/hero-images', [LandingPageController::class, 'storeHeroImage']);
         Route::delete('/hero-images/{heroImage}', [LandingPageController::class, 'deleteHeroImage']);
 
+        // Login Background Images
+        Route::post('/login-backgrounds', [LandingPageController::class, 'storeLoginBackground']);
+        Route::delete('/login-backgrounds/{loginBackground}', [LandingPageController::class, 'deleteLoginBackground']);
+
         // Leaders
         Route::post('/leaders', [LandingPageController::class, 'storeLeader']);
         Route::post('/leaders/{leader}', [LandingPageController::class, 'updateLeader']); // Upd w/ file
@@ -220,6 +225,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\CourseController::class, 'index']);
         Route::post('/sync', [\App\Http\Controllers\Api\CourseController::class, 'sync']);
         Route::get('/my', [\App\Http\Controllers\API\CourseController::class, 'myCourses']);
+        // Tracking HARUS di atas /{id} agar tidak kena match sebagai ID
+        Route::get('/enrollments/tracking', [\App\Http\Controllers\Api\CourseController::class, 'getEnrollmentTracking']);
+        // Specific routes dulu baru dynamic {id}
         Route::get('/{id}', [\App\Http\Controllers\Api\CourseController::class, 'show']);
         Route::put('/{id}', [\App\Http\Controllers\Api\CourseController::class, 'update']);
         Route::post('/{id}/enroll', [\App\Http\Controllers\Api\CourseController::class, 'enrollUser']);
@@ -227,9 +235,53 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // =====================
+    // CERTIFICATE TEMPLATE MANAGEMENT (Admin & Super Admin)
+    // =====================
+    Route::prefix('certificate-templates')->middleware('role:admin|super-admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\CertificateTemplateController::class, 'index']);
+        Route::get('/variables', [\App\Http\Controllers\API\CertificateTemplateController::class, 'getAvailableVariables']);
+        Route::get('/categories', [\App\Http\Controllers\API\CertificateTemplateController::class, 'getCategories']);
+        Route::get('/{template}', [\App\Http\Controllers\API\CertificateTemplateController::class, 'show']);
+        Route::post('/', [\App\Http\Controllers\API\CertificateTemplateController::class, 'store']);
+        Route::post('/{template}', [\App\Http\Controllers\API\CertificateTemplateController::class, 'update']);
+        Route::delete('/{template}', [\App\Http\Controllers\API\CertificateTemplateController::class, 'destroy']);
+    });
+
+    // =====================
+    // CERTIFICATES
+    // =====================
+    Route::prefix('certificates')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\CertificateController::class, 'index']); // My certificates
+        Route::get('/verify', [\App\Http\Controllers\API\CertificateController::class, 'verify']); // Public verification
+        Route::get('/{id}', [\App\Http\Controllers\API\CertificateController::class, 'show']);
+        Route::get('/{id}/download', [\App\Http\Controllers\API\CertificateController::class, 'download']);
+    });
+
+    // Admin certificate management
+    Route::prefix('admin/certificates')->middleware('role:admin|super-admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\CertificateController::class, 'getAllCertificates']);
+        Route::get('/stats', [\App\Http\Controllers\API\CertificateController::class, 'stats']);
+        Route::patch('/{id}/revoke', [\App\Http\Controllers\API\CertificateController::class, 'revoke']);
+        Route::patch('/{id}/restore', [\App\Http\Controllers\API\CertificateController::class, 'restore']);
+    });
+
+    // =====================
     // MOODLE SSO ROUTE
     // =====================
     Route::post('/moodle/login-url', [\App\Http\Controllers\API\MoodleAuthController::class, 'getLoginUrl']);
+
+    // =====================
+    // MOODLE SYNC ROUTES (Super Admin & Admin)
+    // =====================
+    Route::prefix('moodle/sync')->middleware('role:super-admin|admin')->group(function () {
+        Route::get('/status', [\App\Http\Controllers\API\MoodleSyncController::class, 'status']);
+        Route::get('/history', [\App\Http\Controllers\API\MoodleSyncController::class, 'history']);
+        Route::post('/full', [\App\Http\Controllers\API\MoodleSyncController::class, 'fullSync'])->middleware('role:super-admin');
+        Route::post('/users', [\App\Http\Controllers\API\MoodleSyncController::class, 'syncUsers']);
+        Route::post('/courses', [\App\Http\Controllers\API\MoodleSyncController::class, 'syncCourses']);
+        Route::post('/enrollments', [\App\Http\Controllers\API\MoodleSyncController::class, 'syncEnrollments']);
+        Route::post('/categories', [\App\Http\Controllers\API\MoodleSyncController::class, 'syncCategories']);
+    });
 
     // =====================
     // AI CHAT & FAQ ROUTES

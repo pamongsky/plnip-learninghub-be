@@ -108,7 +108,7 @@ class DashboardController extends Controller
 
         // Get instructor's courses from Moodle
         $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
-        
+
         try {
             // First, get user ID from Moodle
             $moodleUser = DB::connection('moodle')
@@ -147,7 +147,7 @@ class DashboardController extends Controller
         $mapCourses = $courses->map(function ($course) use ($moodleBase) {
             $now = now()->timestamp;
             $status = 'active';
-            
+
             if ($course->startdate > $now) {
                 $status = 'upcoming';
             } elseif ($course->enddate > 0 && $course->enddate < $now) {
@@ -210,12 +210,24 @@ class DashboardController extends Controller
             ->groupBy('department')
             ->get();
 
+        // Get courses count from Moodle
+        $totalCourses = 0;
+        try {
+            $totalCourses = DB::connection('moodle')
+                ->table('course')
+                ->where('id', '!=', 1) // Exclude site course
+                ->where('visible', 1)
+                ->count();
+        } catch (\Exception $e) {
+            \Log::warning('Could not fetch Moodle courses count: ' . $e->getMessage());
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
                 'total_users' => $totalUsers,
                 'total_announcements' => $totalAnnouncements,
-                'total_courses' => 0, // Will be dynamic when course system exists
+                'total_courses' => $totalCourses,
                 'department_breakdown' => $departmentStats,
             ],
         ], 200);
