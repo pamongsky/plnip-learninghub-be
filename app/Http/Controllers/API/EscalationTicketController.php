@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\EscalationTicket;
 use App\Models\EscalationReply;
 use App\Models\SupportTicket;
+use App\Events\NewEscalationReply;
+use App\Events\EscalationStatusUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -114,7 +116,7 @@ class EscalationTicketController extends Controller
 
         $user = Auth::user();
 
-        if (!$user->hasRole('admin')) {
+        if (!$user->hasRole('admin') && !$user->hasRole('super-admin')) {
             return response()->json(['message' => 'Only admins can create escalation tickets'], 403);
         }
 
@@ -148,7 +150,7 @@ class EscalationTicketController extends Controller
 
         $user = Auth::user();
 
-        if (!$user->hasRole('admin')) {
+        if (!$user->hasRole('admin') && !$user->hasRole('super-admin')) {
             return response()->json(['message' => 'Only admins can escalate tickets'], 403);
         }
 
@@ -186,7 +188,14 @@ class EscalationTicketController extends Controller
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Gagal mengekskalasi tiket'], 500);
+            \Illuminate\Support\Facades\Log::error('Failed to escalate ticket', [
+                'error' => $e->getMessage(),
+                'ticket_id' => $supportTicket->id,
+                'user_id' => $user->id,
+            ]);
+            return response()->json([
+                'message' => 'Gagal mengekskalasi tiket: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -197,8 +206,8 @@ class EscalationTicketController extends Controller
     {
         $user = Auth::user();
 
-        // Check access: Allow admin/super-admin variants
-        if (!$user->hasRole(['admin', 'Admin', 'super-admin', 'superadmin', 'Super Admin'])) {
+        // Check access: Allow admin and super-admin
+        if (!$user->hasRole('admin') && !$user->hasRole('super-admin')) {
             \Illuminate\Support\Facades\Log::warning('Escalation access denied. User ID: ' . $user->id);
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -237,10 +246,8 @@ class EscalationTicketController extends Controller
 
         $user = Auth::user();
 
-        // Check access - only admin owner or superadmin can reply
         // Check access: Only Admin and Superadmin allowed
-        // Check access: Only Admin and Superadmin allowed
-        if (!$user->hasRole(['admin', 'Admin', 'super-admin', 'superadmin', 'Super Admin'])) {
+        if (!$user->hasRole('admin') && !$user->hasRole('super-admin')) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -255,17 +262,23 @@ class EscalationTicketController extends Controller
             'attachments' => $this->handleAttachments($request),
         ]);
 
+        // Load user relationship for broadcasting
+        $reply->load('user:id,name,email');
+
         // Update ticket status if superadmin replies
-        if ($user->hasRole(['super-admin', 'superadmin', 'Super Admin']) && $escalationTicket->status === 'open') {
+        if ($user->hasRole('super-admin') && $escalationTicket->status === 'open') {
             $escalationTicket->update([
                 'status' => 'in_progress',
                 'superadmin_id' => $user->id,
             ]);
         }
 
+        // Broadcast new reply to all connected users
+        broadcast(new NewEscalationReply($reply))->toOthers();
+
         return response()->json([
             'message' => 'Balasan berhasil dikirim',
-            'reply' => $reply->load('user:id,name,email'),
+            'reply' => $reply,
         ], 201);
     }
 
@@ -305,7 +318,7 @@ class EscalationTicketController extends Controller
         $user = Auth::user();
 
         // Only superadmin can change status (or admin can close their own)
-        if (!$user->hasRole(['super-admin', 'superadmin', 'Super Admin']) && !($user->hasRole(['admin', 'Admin']) && $request->status === 'closed')) {
+        if (!$user->hasRole('super-admin') && !($user->hasRole('admin') && $request->status === 'closed')) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -315,11 +328,14 @@ class EscalationTicketController extends Controller
             $updateData['resolved_at'] = now();
         }
 
-        if ($user->hasRole(['super-admin', 'superadmin', 'Super Admin']) && !$escalationTicket->superadmin_id) {
+        if ($user->hasRole('super-admin') && !$escalationTicket->superadmin_id) {
             $updateData['superadmin_id'] = $user->id;
         }
 
         $escalationTicket->update($updateData);
+
+        // Broadcast status update to all connected users
+        broadcast(new EscalationStatusUpdated($escalationTicket))->toOthers();
 
         return response()->json([
             'message' => 'Status tiket berhasil diperbarui',

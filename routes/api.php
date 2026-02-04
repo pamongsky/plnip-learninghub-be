@@ -76,6 +76,14 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // =====================
+    // ACTIVITY LOG (Super Admin Only)
+    // =====================
+    Route::prefix('activity-log')->middleware('role:super-admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\ActivityLogController::class, 'index']);
+        Route::get('/users/{user}', [\App\Http\Controllers\API\ActivityLogController::class, 'userLogs']);
+    });
+
+    // =====================
     // ROLES & PERMISSIONS (Super Admin Only)
     // =====================
     Route::prefix('superadmin/roles')->middleware('role:super-admin')->group(function () {

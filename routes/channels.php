@@ -61,3 +61,30 @@ Broadcast::channel('support-ticket.{ticketId}', function ($user, $ticketId) {
 
     return $isOwner || $isAssigned || $isAdmin;
 });
+
+// Escalation Ticket Channel (Admin <-> Super Admin)
+Broadcast::channel('escalation-ticket.{ticketId}', function ($user, $ticketId) {
+    $ticket = \App\Models\EscalationTicket::find($ticketId);
+    if (!$ticket) {
+        \Log::warning('Broadcasting auth failed: Escalation ticket not found', ['ticket_id' => $ticketId]);
+        return false;
+    }
+
+    // Allow admin who created it or assigned super admin
+    $isAdmin = (int) $user->id === (int) $ticket->admin_id;
+    $isSuperAdmin = (int) $user->id === (int) $ticket->superadmin_id;
+    $hasRole = $user->hasRole(['admin', 'super-admin']);
+
+    \Log::info('Escalation broadcasting auth check', [
+        'user_id' => $user->id,
+        'ticket_id' => $ticketId,
+        'admin_id' => $ticket->admin_id,
+        'superadmin_id' => $ticket->superadmin_id,
+        'is_admin' => $isAdmin,
+        'is_superadmin' => $isSuperAdmin,
+        'has_role' => $hasRole,
+        'result' => $isAdmin || $isSuperAdmin || $hasRole,
+    ]);
+
+    return $isAdmin || $isSuperAdmin || $hasRole;
+});

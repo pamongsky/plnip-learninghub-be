@@ -22,11 +22,11 @@ return new class extends Migration
             $table->text('description');
             $table->enum('priority', ['low', 'medium', 'high', 'urgent'])->default('medium');
             $table->enum('status', ['open', 'in_progress', 'resolved', 'closed'])->default('open');
-            $table->enum('category', ['technical', 'access', 'moodle', 'feature_request', 'other'])->default('other');
+            $table->enum('category', ['technical', 'learning', 'certificate', 'payment', 'access', 'moodle', 'feature_request', 'other'])->default('other');
             $table->timestamp('escalated_at')->nullable();
             $table->timestamp('resolved_at')->nullable();
             $table->timestamps();
-            
+
             $table->index(['admin_id', 'status']);
             $table->index(['superadmin_id', 'status']);
             $table->index('type');

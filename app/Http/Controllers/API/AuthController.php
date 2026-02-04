@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -34,6 +35,18 @@ class AuthController extends Controller
 
         // Create token
         $token = $user->createToken('api-token')->plainTextToken;
+
+        // Log login activity
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'login',
+            'entity_type' => 'User',
+            'entity_id' => $user->id,
+            'changes' => null,
+            'reason' => 'Login sukses',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
 
         return response()->json([
             'success' => true,
@@ -94,7 +107,21 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+
+        // Log logout activity
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'logout',
+            'entity_type' => 'User',
+            'entity_id' => $user->id,
+            'changes' => null,
+            'reason' => 'Logout dari sistem',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        $user->currentAccessToken()->delete();
 
         return response()->json([
             'success' => true,

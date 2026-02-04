@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -112,6 +113,18 @@ class MoodleAuthController extends Controller
             $loginUrl = $this->moodleUrl . '/auth/userkey/login.php?key=' . $key;
 
             Log::info("SSO URL generated for user {$user->email} → Moodle user ID {$moodleUser->id}");
+
+            // Log Moodle access
+            AuditLog::create([
+                'user_id' => $user->id,
+                'action' => 'akses_lms',
+                'entity_type' => 'Moodle',
+                'entity_id' => $moodleUser->id,
+                'changes' => null,
+                'reason' => 'Akses LMS Moodle via SSO',
+                'ip_address' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+            ]);
 
             return response()->json([
                 'success' => true,
