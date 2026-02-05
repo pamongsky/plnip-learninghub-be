@@ -34,6 +34,18 @@ class Course extends Model
         'is_active' => 'boolean',
     ];
 
+    protected $appends = ['moodle_url'];
+
+    public function getMoodleUrlAttribute()
+    {
+        if (!$this->moodle_course_id) {
+            return null;
+        }
+
+        $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
+        return "{$moodleBase}/course/view.php?id={$this->moodle_course_id}";
+    }
+
     public function enrollments()
     {
         return $this->hasMany(CourseEnrollment::class);

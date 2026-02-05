@@ -32,15 +32,30 @@ class ClassChatController extends Controller
     public function store(Request $request, int $classId): JsonResponse
     {
         $validated = $request->validate([
-            'message' => 'required|string|max:2000',
+            'message' => 'nullable|string|max:2000',
             'message_type' => 'in:discussion,question',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // Max 5MB
         ]);
+
+        // At least message or image must be present
+        if (empty($validated['message']) && !$request->hasFile('image')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pesan atau gambar harus diisi',
+            ], 422);
+        }
+
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('class-chat-images', 'public');
+        }
 
         $message = ClassMessage::create([
             'class_id' => $classId,
             'user_id' => $request->user()->id,
-            'message' => $validated['message'],
+            'message' => $validated['message'] ?? '[Gambar]',
             'message_type' => $validated['message_type'] ?? 'discussion',
+            'image_path' => $imagePath,
         ]);
 
         $message->load(['user:id,name,avatar']);
@@ -104,7 +119,7 @@ class ClassChatController extends Controller
     public function getQuestionStats(Request $request): JsonResponse
     {
         $userId = $request->user()->id;
-        
+
         // Get class IDs where user is instructor
         // Assuming there's a class_instructor pivot or instructor_id in classes table
         // Adjust this query based on your actual schema

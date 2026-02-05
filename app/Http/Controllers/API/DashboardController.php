@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
+use App\Models\Course;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -108,6 +109,8 @@ class DashboardController extends Controller
 
         // Get instructor's courses from Moodle
         $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
+        $moodleUser = null; // Initialize variable
+        $courses = collect([]); // Initialize courses
 
         try {
             // First, get user ID from Moodle
@@ -116,27 +119,42 @@ class DashboardController extends Controller
                 ->where('email', $user->email)
                 ->first();
 
-            if (!$moodleUser) {
-                // User not found in Moodle, return empty courses
-                $courses = collect([]);
-            } else {
-                // Get courses where user is enrolled
+            \Log::info("Instructor Dashboard - Moodle User Check", [
+                'email' => $user->email,
+                'found' => $moodleUser ? true : false,
+                'moodle_user_id' => $moodleUser ? $moodleUser->id : null
+            ]);
+
+            if ($moodleUser) {
+                // Get courses where user is a teacher/instructor
+                // Check for editingteacher or teacher role assignments
                 $courses = DB::connection('moodle')
                     ->table('course as c')
-                    ->join('enrol as e', 'c.id', '=', 'e.courseid')
-                    ->join('user_enrolments as ue', 'e.id', '=', 'ue.enrolid')
-                    ->where('ue.userid', $moodleUser->id)
+                    ->join('context as ctx', function($join) {
+                        $join->on('ctx.instanceid', '=', 'c.id')
+                             ->where('ctx.contextlevel', '=', 50); // CONTEXT_COURSE = 50
+                    })
+                    ->join('role_assignments as ra', 'ra.contextid', '=', 'ctx.id')
+                    ->join('role as r', 'ra.roleid', '=', 'r.id')
+                    ->where('ra.userid', $moodleUser->id)
+                    ->whereIn('r.shortname', ['editingteacher', 'teacher']) // Teacher roles
                     ->where('c.id', '!=', 1) // Exclude site home course
                     ->select(
                         'c.id',
                         'c.fullname as title',
                         'c.shortname',
-                        'c.summary as description',
                         'c.startdate',
-                        'c.enddate'
+                        'c.enddate',
+                        'c.visible'
                     )
+                    ->where('c.visible', 1) // Only visible courses
                     ->distinct()
                     ->get();
+
+                \Log::info("Instructor Dashboard - Courses Query Result", [
+                    'courses_count' => $courses->count(),
+                    'course_ids' => $courses->pluck('id')->toArray()
+                ]);
             }
         } catch (\Exception $e) {
             \Log::error('Moodle connection error: ' . $e->getMessage());
@@ -165,11 +183,15 @@ class DashboardController extends Controller
                 $participantCount = 0;
             }
 
+            // Find Portal course ID by Moodle course ID
+            $portalCourse = Course::where('moodle_course_id', $course->id)->first();
+
             return [
-                'id' => $course->id,
+                'id' => $portalCourse ? $portalCourse->id : $course->id, // Use Portal ID for routing
+                'moodle_course_id' => $course->id, // Keep Moodle ID for reference
                 'title' => $course->title,
                 'short_name' => $course->shortname,
-                'description' => strip_tags($course->description ?? ''),
+                'description' => '', // Removed to avoid CLOB issues with DISTINCT
                 'participants' => $participantCount,
                 'schedule' => $course->shortname,
                 'status' => $status,
@@ -183,6 +205,45 @@ class DashboardController extends Controller
         $totalParticipants = $mapCourses->sum('participants');
         $completedClasses = $mapCourses->where('status', 'completed')->count();
 
+        // Calculate average attendance from Moodle logs
+        $averageAttendance = 0;
+        if ($courses->isNotEmpty() && isset($moodleUser)) {
+            try {
+                // Get attendance data from Moodle course completion
+                $completionStats = DB::connection('moodle')
+                    ->table('course_completions as cc')
+                    ->join('enrol as e', 'cc.course', '=', 'e.courseid')
+                    ->join('user_enrolments as ue', function($join) use ($moodleUser) {
+                        $join->on('e.id', '=', 'ue.enrolid')
+                             ->where('ue.userid', '=', $moodleUser->id);
+                    })
+                    ->whereNotNull('cc.timecompleted')
+                    ->count();
+
+                $totalCourses = $courses->count();
+                if ($totalCourses > 0) {
+                    $averageAttendance = round(($completionStats / $totalCourses) * 100);
+                }
+
+                // If no completion data, check user activity logs as alternative
+                if ($averageAttendance === 0 && $totalCourses > 0) {
+                    $activityCount = DB::connection('moodle')
+                        ->table('logstore_standard_log')
+                        ->where('userid', $moodleUser->id)
+                        ->where('action', 'viewed')
+                        ->where('target', 'course')
+                        ->whereIn('courseid', $courses->pluck('id'))
+                        ->distinct('courseid')
+                        ->count('courseid');
+
+                    $averageAttendance = round(($activityCount / $totalCourses) * 100);
+                }
+            } catch (\Exception $e) {
+                \Log::error('Error calculating attendance: ' . $e->getMessage());
+                $averageAttendance = 0;
+            }
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -190,7 +251,7 @@ class DashboardController extends Controller
                     'active_classes' => $activeClasses,
                     'total_participants' => $totalParticipants,
                     'completed_classes' => $completedClasses,
-                    'average_attendance' => 87, // Placeholder
+                    'average_attendance' => $averageAttendance,
                 ],
                 'announcements' => $announcements,
                 'classes' => $mapCourses->values(),

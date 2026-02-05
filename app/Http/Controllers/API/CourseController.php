@@ -134,9 +134,77 @@ class CourseController extends Controller
         $course = Course::with([
             'instructor:id,name,avatar',
             'enrollments.user:id,name,email,avatar,department',
-            'students', // Add this
+            'students',
             'certificateTemplate:id,name,category,preview_path'
         ])->findOrFail($id);
+
+        // Enrich enrollment data with Moodle progress and activity
+        if ($course->moodle_course_id && $course->enrollments) {
+            try {
+                $moodleConn = DB::connection('moodle');
+
+                foreach ($course->enrollments as $enrollment) {
+                    $user = $enrollment->user;
+
+                    // Get Moodle user
+                    $moodleUser = $moodleConn->table('user')
+                        ->where('email', $user->email)
+                        ->first();
+
+                    if ($moodleUser) {
+                        // Get course completion progress
+                        $completion = $moodleConn->table('course_completions')
+                            ->where('userid', $moodleUser->id)
+                            ->where('course', $course->moodle_course_id)
+                            ->first();
+
+                        if ($completion && $completion->timecompleted) {
+                            $enrollment->progress = 100;
+                        } else {
+                            // Calculate progress from completed activities
+                            $totalActivities = $moodleConn->table('course_modules as cm')
+                                ->join('modules as m', 'cm.module', '=', 'm.id')
+                                ->where('cm.course', $course->moodle_course_id)
+                                ->where('cm.visible', 1)
+                                ->where('cm.completion', '>', 0)
+                                ->count();
+
+                            if ($totalActivities > 0) {
+                                $completedActivities = $moodleConn->table('course_modules_completion')
+                                    ->join('course_modules as cm', 'course_modules_completion.coursemoduleid', '=', 'cm.id')
+                                    ->where('cm.course', $course->moodle_course_id)
+                                    ->where('course_modules_completion.userid', $moodleUser->id)
+                                    ->where('course_modules_completion.completionstate', '>', 0)
+                                    ->count();
+
+                                $enrollment->progress = round(($completedActivities / $totalActivities) * 100);
+                            } else {
+                                $enrollment->progress = 0;
+                            }
+                        }
+
+                        // Get last activity
+                        $lastActivity = $moodleConn->table('logstore_standard_log')
+                            ->where('userid', $moodleUser->id)
+                            ->where('courseid', $course->moodle_course_id)
+                            ->orderBy('timecreated', 'desc')
+                            ->first();
+
+                        if ($lastActivity) {
+                            $enrollment->last_activity_at = date('Y-m-d H:i:s', $lastActivity->timecreated);
+                        } else {
+                            $enrollment->last_activity_at = null;
+                        }
+                    } else {
+                        $enrollment->progress = 0;
+                        $enrollment->last_activity_at = null;
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error('Error fetching Moodle progress data: ' . $e->getMessage());
+                // Continue without enrichment
+            }
+        }
 
         return response()->json($course);
     }
@@ -197,9 +265,16 @@ class CourseController extends Controller
             $course = Course::findOrFail($id);
             $user = User::findOrFail($request->user_id);
 
-            // Check already enrolled locally
-             if (CourseEnrollment::where('course_id', $course->id)->where('user_id', $user->id)->exists()) {
-                return response()->json(['message' => 'User sudah terdaftar di kelas ini'], 422);
+            // Check already enrolled locally (only active enrollments)
+            $existingEnrollment = CourseEnrollment::where('course_id', $course->id)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if ($existingEnrollment) {
+                if ($existingEnrollment->status === 'active') {
+                    return response()->json(['message' => 'User sudah terdaftar di kelas ini'], 422);
+                }
+                // If suspended, we'll reactivate it later
             }
 
             // --- MOODLE DIRECT DB SYNC ---
@@ -252,14 +327,25 @@ class CourseController extends Controller
                      throw new \Exception("Manual Enrollment method not enabled for this course in Moodle.");
                 }
 
-                // 4. Insert into mdl_user_enrolments (The "Join" action)
-                // Check if already exists first to avoid duplicate errors
+                // 4. Insert or UPDATE mdl_user_enrolments (The "Join" action)
+                // Check if already exists first
                 $existingEnrol = $moodleConn->table('user_enrolments')
                     ->where('enrolid', $enrolInstance->id)
                     ->where('userid', $moodleUser->id)
                     ->first();
 
-                if (!$existingEnrol) {
+                if ($existingEnrol) {
+                    // Reactivate if suspended (status = 1 means suspended)
+                    if ($existingEnrol->status == 1) {
+                        $moodleConn->table('user_enrolments')
+                            ->where('id', $existingEnrol->id)
+                            ->update([
+                                'status' => 0, // 0 = Active
+                                'timemodified' => now()->timestamp,
+                            ]);
+                    }
+                } else {
+                    // Create new enrollment
                     $moodleConn->table('user_enrolments')->insert([
                         'status' => 0, // 0 = Active
                         'enrolid' => $enrolInstance->id,
@@ -316,13 +402,23 @@ class CourseController extends Controller
             }
 
             // --- LOCAL UPDATE ---
-            $enrollment = CourseEnrollment::create([
-                'course_id' => $course->id,
-                'user_id' => $user->id,
-                'moodle_role_id' => $roleId, // Use the mapped role ID
-                'status' => 'active',
-                'enrolled_at' => now(),
-            ]);
+            // Reactivate if suspended, or create new if doesn't exist
+            if ($existingEnrollment) {
+                $existingEnrollment->update([
+                    'status' => 'active',
+                    'moodle_role_id' => $roleId,
+                    'enrolled_at' => now(),
+                ]);
+                $enrollment = $existingEnrollment;
+            } else {
+                $enrollment = CourseEnrollment::create([
+                    'course_id' => $course->id,
+                    'user_id' => $user->id,
+                    'moodle_role_id' => $roleId,
+                    'status' => 'active',
+                    'enrolled_at' => now(),
+                ]);
+            }
 
             DB::commit();
 

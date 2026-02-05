@@ -15,6 +15,7 @@ class ClassMessage extends Model
         'is_answered',
         'answered_by',
         'answered_at',
+        'image_path',
     ];
 
     protected $casts = [
