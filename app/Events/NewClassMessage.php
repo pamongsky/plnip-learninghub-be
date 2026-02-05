@@ -47,13 +47,16 @@ class NewClassMessage implements ShouldBroadcast
      */
     public function broadcastWith(): array
     {
-        return [
+        $data = [
             'id' => $this->message->id,
             'class_id' => $this->message->class_id,
             'user_id' => $this->message->user_id,
             'message' => $this->message->message,
             'message_type' => $this->message->message_type,
             'is_answered' => $this->message->is_answered,
+            'reply_to' => $this->message->reply_to,
+            'mentioned_user_id' => $this->message->mentioned_user_id,
+            'image_path' => $this->message->image_path,
             'created_at' => $this->message->created_at->toISOString(),
             'user' => [
                 'id' => $this->message->user->id,
@@ -61,5 +64,27 @@ class NewClassMessage implements ShouldBroadcast
                 'avatar' => $this->message->user->avatar,
             ],
         ];
+
+        // Add reply message if exists and loaded
+        if ($this->message->relationLoaded('replyToMessage') && $this->message->replyToMessage) {
+            $data['replyToMessage'] = [
+                'id' => $this->message->replyToMessage->id,
+                'message' => $this->message->replyToMessage->message,
+                'user' => $this->message->replyToMessage->user ? [
+                    'id' => $this->message->replyToMessage->user->id,
+                    'name' => $this->message->replyToMessage->user->name,
+                ] : null,
+            ];
+        }
+
+        // Add mentioned user if exists and loaded
+        if ($this->message->relationLoaded('mentionedUser') && $this->message->mentionedUser) {
+            $data['mentionedUser'] = [
+                'id' => $this->message->mentionedUser->id,
+                'name' => $this->message->mentionedUser->name,
+            ];
+        }
+
+        return $data;
     }
 }

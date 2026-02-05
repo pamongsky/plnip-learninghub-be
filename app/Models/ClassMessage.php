@@ -12,6 +12,8 @@ class ClassMessage extends Model
         'user_id',
         'message',
         'message_type',
+        'reply_to',
+        'mentioned_user_id',
         'is_answered',
         'answered_by',
         'answered_at',
@@ -39,6 +41,22 @@ class ClassMessage extends Model
     public function answeredByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'answered_by');
+    }
+
+    /**
+     * Get the message being replied to
+     */
+    public function replyToMessage(): BelongsTo
+    {
+        return $this->belongsTo(ClassMessage::class, 'reply_to');
+    }
+
+    /**
+     * Get the user being mentioned
+     */
+    public function mentionedUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'mentioned_user_id');
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\ClassMessage;
 use App\Events\NewClassMessage;
+use App\Events\QuestionAnswered;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -12,13 +13,36 @@ class ClassChatController extends Controller
 {
     /**
      * Get messages for a class
+     * By default loads ALL messages to preserve chat history
      */
     public function index(Request $request, int $classId): JsonResponse
     {
-        $messages = ClassMessage::forClass($classId)
-            ->with(['user:id,name,avatar', 'answeredByUser:id,name'])
-            ->orderBy('created_at', 'desc')
-            ->paginate(50);
+        $perPage = $request->input('per_page', 0); // 0 = all messages (no pagination)
+
+        $query = ClassMessage::forClass($classId)
+            ->with([
+                'user:id,name,avatar',
+                'answeredByUser:id,name',
+                'replyToMessage.user:id,name',
+                'mentionedUser:id,name'
+            ])
+            ->orderBy('created_at', 'asc'); // Oldest first
+
+        // If per_page is 0 or not specified, load ALL messages
+        if ($perPage <= 0) {
+            $messages = $query->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'data' => $messages,
+                    'total' => $messages->count(),
+                ],
+            ]);
+        }
+
+        // Otherwise use pagination
+        $messages = $query->paginate($perPage);
 
         return response()->json([
             'success' => true,
@@ -31,43 +55,87 @@ class ClassChatController extends Controller
      */
     public function store(Request $request, int $classId): JsonResponse
     {
-        $validated = $request->validate([
-            'message' => 'nullable|string|max:2000',
-            'message_type' => 'in:discussion,question',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // Max 5MB
-        ]);
+        try {
+            $validated = $request->validate([
+                'message' => 'nullable|string|max:2000',
+                'message_type' => 'in:discussion,question',
+                'reply_to' => 'nullable|exists:class_messages,id',
+                'mentioned_user_id' => 'nullable|exists:users,id',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // Max 5MB
+            ]);
 
-        // At least message or image must be present
-        if (empty($validated['message']) && !$request->hasFile('image')) {
+            // At least message or image must be present
+            if (empty($validated['message']) && !$request->hasFile('image')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Pesan atau gambar harus diisi',
+                ], 422);
+            }
+
+            // Validate reply_to belongs to same class
+            if (!empty($validated['reply_to'])) {
+                $replyMessage = ClassMessage::find($validated['reply_to']);
+                if (!$replyMessage || $replyMessage->class_id != $classId) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Pesan yang direply tidak valid',
+                    ], 422);
+                }
+            }
+
+            $imagePath = null;
+            if ($request->hasFile('image')) {
+                $imagePath = $request->file('image')->store('class-chat-images', 'public');
+            }
+
+            $message = ClassMessage::create([
+                'class_id' => $classId,
+                'user_id' => $request->user()->id,
+                'message' => $validated['message'] ?? '[Gambar]',
+                'message_type' => $validated['message_type'] ?? 'discussion',
+                'reply_to' => $validated['reply_to'] ?? null,
+                'mentioned_user_id' => $validated['mentioned_user_id'] ?? null,
+                'image_path' => $imagePath,
+            ]);
+
+            // CRITICAL: Load relationships before broadcasting to prevent queue serialization errors
+            $message->load(['user:id,name,avatar']);
+
+            // Load optional relationships only if they exist
+            if ($message->reply_to) {
+                $message->load('replyToMessage.user:id,name');
+            }
+            if ($message->mentioned_user_id) {
+                $message->load('mentionedUser:id,name');
+            }
+
+            // Broadcast to class channel
+            broadcast(new NewClassMessage($message))->toOthers();
+
+            return response()->json([
+                'success' => true,
+                'data' => $message,
+                'message' => 'Pesan berhasil dikirim',
+            ], 201);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Pesan atau gambar harus diisi',
+                'message' => 'Validasi gagal',
+                'errors' => $e->errors(),
             ], 422);
+        } catch (\Exception $e) {
+            \Log::error('ClassChat store error: ' . $e->getMessage(), [
+                'user_id' => $request->user()->id,
+                'class_id' => $classId,
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan saat mengirim pesan. Silakan coba lagi.',
+            ], 500);
         }
-
-        $imagePath = null;
-        if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('class-chat-images', 'public');
-        }
-
-        $message = ClassMessage::create([
-            'class_id' => $classId,
-            'user_id' => $request->user()->id,
-            'message' => $validated['message'] ?? '[Gambar]',
-            'message_type' => $validated['message_type'] ?? 'discussion',
-            'image_path' => $imagePath,
-        ]);
-
-        $message->load(['user:id,name,avatar']);
-
-        // Broadcast to class channel
-        broadcast(new NewClassMessage($message))->toOthers();
-
-        return response()->json([
-            'success' => true,
-            'data' => $message,
-            'message' => 'Pesan berhasil dikirim',
-        ], 201);
     }
 
     /**
@@ -87,6 +155,9 @@ class ClassChatController extends Controller
         ]);
 
         $message->load(['user:id,name,avatar', 'answeredByUser:id,name']);
+
+        // Broadcast question answered event for real-time stats update
+        broadcast(new QuestionAnswered($message));
 
         return response()->json([
             'success' => true,
@@ -120,10 +191,8 @@ class ClassChatController extends Controller
     {
         $userId = $request->user()->id;
 
-        // Get class IDs where user is instructor
-        // Assuming there's a class_instructor pivot or instructor_id in classes table
-        // Adjust this query based on your actual schema
-        $classIds = \DB::table('classes')
+        // Get course IDs where user is instructor
+        $classIds = \DB::table('courses')
             ->where('instructor_id', $userId)
             ->pluck('id');
 
