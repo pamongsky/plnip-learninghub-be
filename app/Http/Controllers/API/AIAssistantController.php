@@ -78,8 +78,14 @@ class AIAssistantController extends Controller
 
             Log::info('User context built', ['features_count' => count($context['available_features'])]);
 
+            // Get user's enrolled courses for context
+            $enrolledCourses = $this->getUserEnrolledCourses($user);
+            $context['enrolled_courses'] = $enrolledCourses;
+
             // If asking about course content, include it
             $courseContext = null;
+
+            // Check if course_id is explicitly provided
             if (isset($validated['course_id'])) {
                 $course = Course::where('id', $validated['course_id'])
                     ->whereHas('enrollments', function($query) use ($user) {
@@ -90,6 +96,9 @@ class AIAssistantController extends Controller
                 if ($course) {
                     $courseContext = $this->getMoodleCourseContent($course);
                 }
+            } else {
+                // Auto-detect: Check if user is asking about learning materials
+                $courseContext = $this->autoDetectAndFetchCourseContent($validated['message'], $user, $enrolledCourses);
             }
 
             // Call Gemini API with history
@@ -234,6 +243,98 @@ class AIAssistantController extends Controller
                 'Session timeout setelah 2 jam tidak aktif',
             ],
         ];
+    }
+
+    /**
+     * Get user's enrolled courses
+     */
+    private function getUserEnrolledCourses(User $user): array
+    {
+        $courses = Course::whereHas('enrollments', function($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })->get(['id', 'name', 'description', 'moodle_course_id']);
+
+        return $courses->map(function($course) {
+            return [
+                'id' => $course->id,
+                'name' => $course->name,
+                'description' => substr(strip_tags($course->description ?? ''), 0, 200),
+                'moodle_id' => $course->moodle_course_id,
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Auto-detect if user is asking about course material and fetch it
+     */
+    private function autoDetectAndFetchCourseContent(string $message, User $user, array $enrolledCourses): ?array
+    {
+        // Keywords that indicate user is asking about learning materials
+        $materialKeywords = [
+            'materi', 'modul', 'bab', 'topik', 'pelajaran', 'pembelajaran',
+            'jelaskan', 'explain', 'ajarkan', 'tolong jelaskan',
+            'pdf', 'dokumen', 'file', 'slide',
+            'quiz', 'kuis', 'soal', 'ujian', 'tugas', 'assignment',
+            'video', 'rekaman',
+        ];
+
+        $messageLower = strtolower($message);
+        $isAskingAboutMaterial = false;
+
+        foreach ($materialKeywords as $keyword) {
+            if (str_contains($messageLower, $keyword)) {
+                $isAskingAboutMaterial = true;
+                break;
+            }
+        }
+
+        if (!$isAskingAboutMaterial) {
+            return null;
+        }
+
+        Log::info('User is asking about learning material, searching courses...');
+
+        // Try to match course name from user message
+        $matchedCourse = null;
+        $highestScore = 0;
+
+        foreach ($enrolledCourses as $course) {
+            $courseName = strtolower($course['name']);
+            $courseWords = explode(' ', $courseName);
+
+            $score = 0;
+            foreach ($courseWords as $word) {
+                if (strlen($word) > 3 && str_contains($messageLower, $word)) {
+                    $score++;
+                }
+            }
+
+            if ($score > $highestScore) {
+                $highestScore = $score;
+                $matchedCourse = $course;
+            }
+        }
+
+        // If we found a matching course, fetch its content
+        if ($matchedCourse && $highestScore > 0) {
+            Log::info('Matched course: ' . $matchedCourse['name']);
+
+            $course = Course::find($matchedCourse['id']);
+            if ($course) {
+                return $this->getMoodleCourseContent($course);
+            }
+        }
+
+        // If no specific match but user has only 1 course, use that
+        if (count($enrolledCourses) === 1) {
+            $course = Course::find($enrolledCourses[0]['id']);
+            if ($course) {
+                Log::info('Using single enrolled course: ' . $course->name);
+                return $this->getMoodleCourseContent($course);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -414,6 +515,17 @@ class AIAssistantController extends Controller
                     $systemPrompt .= "  * {$step}\n";
                 }
             }
+        }
+
+        // Add user's enrolled courses
+        if (!empty($context['enrolled_courses'])) {
+            $systemPrompt .= "\n## KELAS YANG DIIKUTI USER\n";
+            $systemPrompt .= "User terdaftar di kelas-kelas berikut:\n";
+            foreach ($context['enrolled_courses'] as $course) {
+                $systemPrompt .= "- **{$course['name']}**: {$course['description']}\n";
+            }
+            $systemPrompt .= "\nJika user bertanya tentang materi, cari dari kelas-kelas di atas.\n";
+            $systemPrompt .= "Jika tidak yakin kelas mana, tanyakan ke user.\n";
         }
 
         // Add course content if provided
