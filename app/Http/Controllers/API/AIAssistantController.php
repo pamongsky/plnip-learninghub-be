@@ -167,15 +167,71 @@ class AIAssistantController extends Controller
             'platform_name' => 'PLN IP Learning Hub',
             'available_features' => $this->getAvailableFeatures($user),
             'navigation' => $this->getNavigationMenu($user),
+            'landing_page_info' => $this->getLandingPageInfo(),
             'guidelines' => [
-                'Bantu user dengan SEMUA pertanyaan terkait pembelajaran PLN IP (kelistrikan, teknik, perhitungan, dll)',
-                'Jelaskan konsep teknis kelistrikan dengan detail, rumus, dan contoh praktis',
-                'Bantu user navigasi dan menggunakan fitur platform',
-                'Jawab dalam bahasa Indonesia yang mudah dipahami',
-                'Gunakan rumus matematika dan perhitungan jika dibutuhkan',
-                'Jika pertanyaan sangat spesifik/kompleks, sarankan buat support ticket atau tanya instructor',
-                'JANGAN pernah tampilkan atau bahas source code',
-                'JANGAN akses atau bahas database/API internal',
+                // General AI capabilities
+                'Anda adalah AI assistant UMUM yang bisa menjawab SEMUA pertanyaan seperti Gemini/ChatGPT biasa',
+                'Jawab pertanyaan apapun: matematika, sains, sejarah, programming, bahasa, dll',
+                'Bantu perhitungan, penjelasan konsep, terjemahan, penulisan, dll',
+
+                // Platform specific
+                'TAMBAHAN: Anda juga memahami platform PLN IP Learning Hub',
+                'Bantu user navigasi fitur platform jika ditanya',
+                'Bantu jelaskan materi pembelajaran dari Moodle jika tersedia',
+                'Bantu user memahami quiz/tugas (jelaskan konsep, JANGAN kasih jawaban langsung)',
+
+                // Language
+                'Jawab dalam bahasa yang sama dengan pertanyaan user (Indonesia/English)',
+                'Gunakan format markdown untuk response yang rapi',
+
+                // Restrictions
+                'JANGAN tampilkan source code atau database internal',
+                'Untuk masalah teknis platform, sarankan buat support ticket',
+            ],
+        ];
+    }
+
+    /**
+     * Get landing page and public features info
+     */
+    private function getLandingPageInfo(): array
+    {
+        return [
+            'public_pages' => [
+                [
+                    'name' => 'Landing Page',
+                    'path' => '/',
+                    'description' => 'Halaman utama PLN IP Learning Hub',
+                    'sections' => ['Hero banner', 'Fitur unggulan', 'Kelas populer', 'Statistik', 'Testimonial'],
+                ],
+                [
+                    'name' => 'Login',
+                    'path' => '/login',
+                    'description' => 'Halaman login untuk masuk ke sistem',
+                    'how_to' => [
+                        'Buka halaman /login atau klik tombol "Masuk" di pojok kanan atas',
+                        'Masukkan email/NIP dan password',
+                        'Klik tombol "Masuk"',
+                        'Jika lupa password, klik "Lupa Password?"',
+                    ],
+                ],
+                [
+                    'name' => 'Register',
+                    'path' => '/register',
+                    'description' => 'Halaman pendaftaran akun baru',
+                    'how_to' => [
+                        'Buka halaman /register atau klik "Daftar" di landing page',
+                        'Isi form: Nama, Email, NIP, Password',
+                        'Klik "Daftar"',
+                        'Cek email untuk verifikasi (jika ada)',
+                    ],
+                ],
+            ],
+            'auth_info' => [
+                'Sistem mendukung login dengan email/NIP',
+                'Password minimal 8 karakter',
+                'Ada fitur "Ingat Saya" untuk login otomatis',
+                'Session timeout setelah 2 jam tidak aktif',
             ],
         ];
     }
@@ -329,14 +385,26 @@ class AIAssistantController extends Controller
 
         Log::info('Building Gemini prompt...');
 
-        // Build system prompt with context
-        $systemPrompt = "Anda adalah AI assistant untuk {$context['platform_name']}.\n\n";
-        $systemPrompt .= "Tugas Anda:\n";
-        $systemPrompt .= "1. Membantu user memahami materi pembelajaran PLN IP (kelistrikan, teknik, perhitungan, dll)\n";
-        $systemPrompt .= "2. Menjawab pertanyaan teknis dengan detail, rumus, dan contoh\n";
-        $systemPrompt .= "3. Membantu navigasi dan penggunaan fitur platform\n\n";
-        $systemPrompt .= "User role: {$context['user_role']}\n\n";
-        $systemPrompt .= "Fitur yang tersedia:\n";
+        // Build system prompt with context - GENERAL AI + PLATFORM CONTEXT
+        $systemPrompt = "Anda adalah AI assistant bernama 'PLN IP Assistant'.\n\n";
+        $systemPrompt .= "## KEMAMPUAN UTAMA\n";
+        $systemPrompt .= "Anda adalah AI UMUM yang bisa menjawab SEMUA jenis pertanyaan seperti Gemini atau ChatGPT:\n";
+        $systemPrompt .= "- Matematika, fisika, kimia, dan perhitungan\n";
+        $systemPrompt .= "- Kelistrikan, teknik, engineering\n";
+        $systemPrompt .= "- Bahasa, penulisan, terjemahan\n";
+        $systemPrompt .= "- Programming dan teknologi\n";
+        $systemPrompt .= "- Sejarah, geografi, pengetahuan umum\n";
+        $systemPrompt .= "- Dan topik lainnya\n\n";
+
+        $systemPrompt .= "## KONTEKS PLATFORM\n";
+        $systemPrompt .= "Anda juga memahami platform {$context['platform_name']} dan bisa membantu:\n";
+        $systemPrompt .= "- Navigasi fitur dan menu\n";
+        $systemPrompt .= "- Cara login, register, akses kelas\n";
+        $systemPrompt .= "- Memahami materi pembelajaran dari Moodle\n";
+        $systemPrompt .= "- Menjelaskan konsep dari quiz/tugas (tanpa memberikan jawaban langsung)\n\n";
+
+        $systemPrompt .= "User saat ini: {$context['user_role']}\n\n";
+        $systemPrompt .= "## FITUR PLATFORM\n";
 
         foreach ($context['available_features'] as $feature) {
             $systemPrompt .= "- {$feature['name']}: {$feature['description']}\n";
@@ -376,12 +444,29 @@ class AIAssistantController extends Controller
             $systemPrompt .= "Gunakan materi di atas untuk menjawab pertanyaan user tentang pembelajaran.\n";
         }
 
-        $systemPrompt .= "\nPanduan:\n";
-        foreach ($context['guidelines'] as $guideline) {
-            $systemPrompt .= "- {$guideline}\n";
+        // Add landing page info for navigation help
+        if (isset($context['landing_page_info'])) {
+            $systemPrompt .= "\n## HALAMAN PUBLIK (sebelum login)\n";
+            foreach ($context['landing_page_info']['public_pages'] ?? [] as $page) {
+                $systemPrompt .= "- {$page['name']} ({$page['path']}): {$page['description']}\n";
+                if (isset($page['how_to'])) {
+                    $systemPrompt .= "  Cara akses:\n";
+                    foreach ($page['how_to'] as $step) {
+                        $systemPrompt .= "  * {$step}\n";
+                    }
+                }
+            }
         }
 
-        $systemPrompt .= "\nJawab dengan lengkap, detail, dan ramah. Jika user tanya tentang fitur, jelaskan step-by-step.";
+        $systemPrompt .= "\n## PANDUAN RESPONSE\n";
+        $systemPrompt .= "- Jawab SEMUA pertanyaan dengan lengkap dan akurat\n";
+        $systemPrompt .= "- Gunakan bahasa yang sama dengan user (Indonesia/English)\n";
+        $systemPrompt .= "- Untuk pertanyaan umum: jawab seperti AI biasa\n";
+        $systemPrompt .= "- Untuk pertanyaan platform: berikan panduan step-by-step\n";
+        $systemPrompt .= "- Untuk materi pembelajaran: jelaskan konsep, berikan contoh\n";
+        $systemPrompt .= "- Untuk quiz/tugas: jelaskan cara mengerjakan, JANGAN kasih jawaban langsung\n";
+        $systemPrompt .= "- Gunakan format markdown untuk response yang rapi\n";
+        $systemPrompt .= "- JANGAN bahas source code atau database internal\n";
 
         Log::info('Calling Gemini API...', ['prompt_length' => strlen($systemPrompt)]);
 
@@ -396,7 +481,7 @@ class AIAssistantController extends Controller
             [
                 'role' => 'model',
                 'parts' => [
-                    ['text' => 'Baik, saya siap membantu. Saya akan membantu dengan materi pembelajaran PLN IP (termasuk perhitungan kelistrikan, teknik, dll) dan juga navigasi platform.'],
+                    ['text' => 'Halo! Saya PLN IP Assistant, siap membantu Anda dengan berbagai pertanyaan. Saya bisa membantu:\n\n1. **Pertanyaan Umum** - Matematika, sains, bahasa, programming, dll\n2. **Materi Pembelajaran** - Penjelasan konsep dari kelas Anda\n3. **Navigasi Platform** - Cara menggunakan fitur PLN IP Learning Hub\n4. **Quiz & Tugas** - Membantu memahami soal (tanpa memberikan jawaban langsung)\n\nSilakan tanyakan apa saja!'],
                 ],
             ],
         ];
@@ -580,30 +665,108 @@ class AIAssistantController extends Controller
     private function extractPDFText(string $pdfUrl): ?string
     {
         try {
-            // Download PDF temporarily
-            $pdfContent = file_get_contents($pdfUrl);
+            Log::info('Extracting PDF from: ' . $pdfUrl);
+
+            // Download PDF with timeout
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 30,
+                ],
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                ],
+            ]);
+
+            $pdfContent = @file_get_contents($pdfUrl, false, $context);
 
             if (!$pdfContent) {
+                Log::warning('Failed to download PDF from: ' . $pdfUrl);
                 return null;
             }
 
             $tempFile = tempnam(sys_get_temp_dir(), 'pdf_');
             file_put_contents($tempFile, $pdfContent);
 
-            // Parse PDF
+            // Parse PDF with smalot/pdfparser
             $parser = new \Smalot\PdfParser\Parser();
             $pdf = $parser->parseFile($tempFile);
+
+            // Get text from all pages
             $text = $pdf->getText();
 
-            // Cleanup
-            unlink($tempFile);
+            // Clean up the text
+            $text = $this->cleanPdfText($text);
 
-            // Limit text length (Gemini has token limits)
-            return substr($text, 0, 10000); // First ~10k chars
+            // Cleanup temp file
+            @unlink($tempFile);
+
+            // Limit text length (Gemini has token limits ~32k)
+            $maxLength = 15000; // Safe limit
+            if (strlen($text) > $maxLength) {
+                $text = substr($text, 0, $maxLength) . "\n\n[... teks dipotong karena terlalu panjang ...]";
+            }
+
+            Log::info('PDF extracted successfully', ['text_length' => strlen($text)]);
+
+            return $text;
 
         } catch (\Exception $e) {
             Log::error('PDF extraction failed: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Clean PDF text for better readability
+     */
+    private function cleanPdfText(string $text): string
+    {
+        // Remove excessive whitespace
+        $text = preg_replace('/\s+/', ' ', $text);
+
+        // Fix common PDF extraction issues
+        $text = preg_replace('/([a-z])([A-Z])/', '$1 $2', $text); // Add space between camelCase
+        $text = preg_replace('/(\d)([A-Za-z])/', '$1 $2', $text); // Add space between number and letter
+        $text = preg_replace('/([A-Za-z])(\d)/', '$1 $2', $text); // Add space between letter and number
+
+        // Add paragraph breaks at likely sentence endings
+        $text = preg_replace('/\. ([A-Z])/', ".\n\n$1", $text);
+
+        // Trim and clean
+        $text = trim($text);
+
+        return $text;
+    }
+
+    /**
+     * Get course materials for AI context (called from chat)
+     */
+    public function getCourseMaterials(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'course_id' => 'required|integer',
+        ]);
+
+        $user = $request->user();
+        $course = Course::where('id', $validated['course_id'])
+            ->whereHas('enrollments', function($query) use ($user) {
+                $query->where('user_id', $user->id);
+            })
+            ->first();
+
+        if (!$course) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak terdaftar di kelas ini',
+            ], 403);
+        }
+
+        $content = $this->getMoodleCourseContent($course);
+
+        return response()->json([
+            'success' => true,
+            'data' => $content,
+        ]);
     }
 }
