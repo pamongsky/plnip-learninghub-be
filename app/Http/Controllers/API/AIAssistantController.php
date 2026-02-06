@@ -252,12 +252,12 @@ class AIAssistantController extends Controller
     {
         $courses = Course::whereHas('enrollments', function($query) use ($user) {
             $query->where('user_id', $user->id);
-        })->get(['id', 'name', 'description', 'moodle_course_id']);
+        })->get(['id', 'title', 'description', 'moodle_course_id']);
 
         return $courses->map(function($course) {
             return [
                 'id' => $course->id,
-                'name' => $course->name,
+                'name' => $course->title, // Course model uses 'title' not 'name'
                 'description' => substr(strip_tags($course->description ?? ''), 0, 200),
                 'moodle_id' => $course->moodle_course_id,
             ];
@@ -329,7 +329,7 @@ class AIAssistantController extends Controller
         if (count($enrolledCourses) === 1) {
             $course = Course::find($enrolledCourses[0]['id']);
             if ($course) {
-                Log::info('Using single enrolled course: ' . $course->name);
+                Log::info('Using single enrolled course: ' . $course->title);
                 return $this->getMoodleCourseContent($course);
             }
         }
@@ -662,7 +662,7 @@ class AIAssistantController extends Controller
 
         if (!$moodleUrl || !$token) {
             return [
-                'course_name' => $course->name,
+                'course_name' => $course->title,
                 'description' => $course->description,
                 'error' => 'Moodle integration not configured',
             ];
@@ -685,7 +685,7 @@ class AIAssistantController extends Controller
 
             // Extract readable content
             $content = [
-                'course_name' => $course->name,
+                'course_name' => $course->title,
                 'description' => strip_tags($course->description ?? ''),
                 'instructor' => $course->instructor->name ?? null,
                 'sections' => [],
@@ -764,7 +764,7 @@ class AIAssistantController extends Controller
             Log::error('Failed to fetch Moodle content: ' . $e->getMessage());
 
             return [
-                'course_name' => $course->name,
+                'course_name' => $course->title,
                 'description' => $course->description,
                 'error' => 'Failed to fetch course content',
             ];
