@@ -669,6 +669,12 @@ class AIAssistantController extends Controller
         }
 
         try {
+            Log::info('Fetching Moodle course content', [
+                'course_id' => $course->id,
+                'moodle_course_id' => $course->moodle_course_id,
+                'moodle_url' => $moodleUrl,
+            ]);
+
             // Get course contents from Moodle
             $response = Http::get("{$moodleUrl}/webservice/rest/server.php", [
                 'wstoken' => $token,
@@ -677,11 +683,32 @@ class AIAssistantController extends Controller
                 'moodlewsrestformat' => 'json',
             ]);
 
+            Log::info('Moodle API response', [
+                'status' => $response->status(),
+                'successful' => $response->successful(),
+            ]);
+
             if (!$response->successful()) {
-                throw new \Exception('Moodle API error');
+                Log::error('Moodle API failed', [
+                    'status' => $response->status(),
+                    'body' => substr($response->body(), 0, 500),
+                ]);
+                throw new \Exception('Moodle API error: ' . $response->status());
             }
 
             $sections = $response->json();
+
+            // Check if Moodle returned an error in the response body
+            if (isset($sections['exception']) || isset($sections['errorcode'])) {
+                Log::error('Moodle returned error in response', [
+                    'error' => $sections['message'] ?? $sections['errorcode'] ?? 'Unknown error',
+                ]);
+                throw new \Exception('Moodle error: ' . ($sections['message'] ?? 'Unknown'));
+            }
+
+            Log::info('Moodle content fetched successfully', [
+                'sections_count' => count($sections),
+            ]);
 
             // Extract readable content
             $content = [
