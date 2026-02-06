@@ -44,6 +44,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/context', [\App\Http\Controllers\API\AIAssistantController::class, 'getContext']);
         Route::post('/chat', [\App\Http\Controllers\API\AIAssistantController::class, 'chat']);
         Route::get('/course/{courseId}/content', [\App\Http\Controllers\API\AIAssistantController::class, 'getCourseContent']);
+        Route::get('/sessions', [\App\Http\Controllers\API\AIAssistantController::class, 'getSessions']);
+        Route::get('/history', [\App\Http\Controllers\API\AIAssistantController::class, 'getHistory']);
+        Route::delete('/sessions/{conversationId}', [\App\Http\Controllers\API\AIAssistantController::class, 'deleteSession']);
     });
 
     // =====================

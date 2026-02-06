@@ -172,7 +172,7 @@ class UserController extends \App\Http\Controllers\Controller
             'phone' => 'nullable|string',
             'department' => 'nullable|string',
             'position' => 'nullable|string',
-            'role' => 'required|string|in:super-admin,admin,instructor,employee',
+            'role' => 'required|string|in:super-admin,admin,instructor,user',
             'password' => 'nullable|string|min:8',
         ]);
 
@@ -222,7 +222,7 @@ class UserController extends \App\Http\Controllers\Controller
             'phone' => 'nullable|string',
             'department' => 'nullable|string',
             'position' => 'nullable|string',
-            'role' => 'sometimes|string|in:super-admin,admin,instructor,employee',
+            'role' => 'sometimes|string|in:super-admin,admin,instructor,user',
             'is_active' => 'sometimes|boolean',
             'reason' => 'nullable|string',
         ]);
@@ -275,7 +275,7 @@ class UserController extends \App\Http\Controllers\Controller
         }
 
         $validated = $request->validate([
-            'role' => 'required|string|in:super-admin,admin,instructor,employee',
+            'role' => 'required|string|in:super-admin,admin,instructor,user',
             'reason' => 'required|string|max:500',
         ]);
 

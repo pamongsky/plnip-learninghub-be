@@ -908,4 +908,90 @@ class AIAssistantController extends Controller
             'data' => $content,
         ]);
     }
+
+    /**
+     * Get all conversation sessions for current user
+     */
+    public function getSessions(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Group by conversation_id, get the first user message as title and latest timestamp
+        $sessions = AiConversation::where('user_id', $user->id)
+            ->select('conversation_id')
+            ->selectRaw('MIN(created_at) as started_at')
+            ->selectRaw('MAX(created_at) as last_message_at')
+            ->selectRaw('COUNT(*) as message_count')
+            ->groupBy('conversation_id')
+            ->orderByRaw('MAX(created_at) DESC')
+            ->get();
+
+        // Get first user message of each conversation as title
+        $result = $sessions->map(function ($session) {
+            $firstMessage = AiConversation::where('conversation_id', $session->conversation_id)
+                ->where('role', 'user')
+                ->orderBy('created_at', 'asc')
+                ->first();
+
+            return [
+                'conversation_id' => $session->conversation_id,
+                'title' => $firstMessage
+                    ? \Illuminate\Support\Str::limit($firstMessage->message, 60)
+                    : 'Percakapan Baru',
+                'message_count' => $session->message_count,
+                'started_at' => $session->started_at,
+                'last_message_at' => $session->last_message_at,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * Get conversation history for a specific session
+     */
+    public function getHistory(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'conversation_id' => 'required|string',
+        ]);
+
+        $user = $request->user();
+
+        $messages = AiConversation::where('conversation_id', $validated['conversation_id'])
+            ->where('user_id', $user->id)
+            ->orderBy('created_at', 'asc')
+            ->get(['message', 'role', 'created_at']);
+
+        return response()->json([
+            'success' => true,
+            'data' => $messages->map(function ($msg) {
+                return [
+                    'role' => $msg->role,
+                    'content' => $msg->message,
+                    'timestamp' => $msg->created_at->toIso8601String(),
+                ];
+            }),
+        ]);
+    }
+
+    /**
+     * Delete a conversation session
+     */
+    public function deleteSession(Request $request, string $conversationId): JsonResponse
+    {
+        $user = $request->user();
+
+        $deleted = AiConversation::where('conversation_id', $conversationId)
+            ->where('user_id', $user->id)
+            ->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => "Percakapan dihapus ({$deleted} pesan)",
+        ]);
+    }
 }
