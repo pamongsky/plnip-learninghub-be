@@ -71,7 +71,7 @@ class SupportTicketController extends Controller
         $validated = $request->validate([
             'subject' => 'required|string|max:255',
             'description' => 'required|string|max:5000',
-            'category' => 'required|in:technical,learning,certificate,payment,other',
+            'category' => 'required|in:technical,learning,certificate,payment,other,schedule,content,student,certification,coordination',
             'priority' => 'in:low,medium,high,urgent',
             'class_id' => 'nullable|integer',
             'attachments' => 'nullable|array|max:5',
