@@ -42,6 +42,7 @@ class CourseController extends Controller
 
         $courses = $user->courses()
             ->with('instructor:id,name,avatar')
+            ->withCount('enrollments as participants_count')
             ->wherePivot('status', 'active')
             ->orderBy('course_enrollments.created_at', 'desc')
             ->get()

@@ -39,7 +39,7 @@ class LandingPageController extends Controller
         ]);
 
         $path = $request->file('file')->store('cms/settings', 'public');
-        $url = asset('storage/' . $path);
+        $url = '/storage/' . $path;
 
         LandingPageSetting::updateOrCreate(
             ['key' => $request->key],
@@ -82,7 +82,7 @@ class LandingPageController extends Controller
         $path = $request->file('image')->store('cms/hero', 'public');
 
         $hero = CmsHeroImage::create([
-            'image_path' => asset('storage/' . $path),
+            'image_path' => '/storage/' . $path,
             'title' => $request->title,
             'order' => $request->order ?? 0,
         ]);
@@ -116,7 +116,7 @@ class LandingPageController extends Controller
 
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('cms/leaders', 'public');
-            $data['image_path'] = asset('storage/' . $path);
+            $data['image_path'] = '/storage/' . $path;
         }
 
         $leader = CmsLeader::create($data);
@@ -136,7 +136,7 @@ class LandingPageController extends Controller
 
         if ($request->hasFile('image')) {
             $path = $request->file('image')->store('cms/leaders', 'public');
-            $data['image_path'] = asset('storage/' . $path);
+            $data['image_path'] = '/storage/' . $path;
         }
 
         $leader->update($data);
@@ -164,7 +164,7 @@ class LandingPageController extends Controller
 
         $partner = CmsPartner::create([
             'name' => $request->name,
-            'logo_path' => asset('storage/' . $path),
+            'logo_path' => '/storage/' . $path,
         ]);
 
         return response()->json($partner, 201);
@@ -190,7 +190,7 @@ class LandingPageController extends Controller
         $path = $request->file('image')->store('cms/login', 'public');
 
         $background = CmsLoginBackground::create([
-            'image_path' => asset('storage/' . $path),
+            'image_path' => '/storage/' . $path,
             'title' => $request->title,
             'order' => $request->order ?? 0,
         ]);

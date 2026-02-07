@@ -104,4 +104,18 @@ class User extends Authenticatable
             ->withPivot('status', 'enrolled_at', 'moodle_role_id')
             ->withTimestamps();
     }
+
+    /**
+     * Get friendly role label
+     */
+    public function getRoleLabelAttribute(): string
+    {
+        // Check for specific roles in order of priority
+        if ($this->roles->contains('name', 'super-admin')) return 'Super Admin';
+        if ($this->roles->contains('name', 'admin')) return 'Admin';
+        if ($this->roles->contains('name', 'instructor')) return 'Instruktur';
+        
+        // Fallback to display name of first role or 'User'
+        return $this->roles->first()?->display_name ?? 'User';
+    }
 }

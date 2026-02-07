@@ -19,12 +19,15 @@ class Announcement extends Model
         'broadcast_to',    // null=all, or specific role/group
         'views_count',
         'expires_at',
+        'target_classes',  // JSON array of class IDs for instructor
+        'target_role',     // 'all', 'user', 'instructor' for admin
     ];
 
     protected $casts = [
         'published_at' => 'datetime',
         'expires_at' => 'datetime',
         'is_active' => 'boolean',
+        'target_classes' => 'array', // Auto cast JSON to array
     ];
 
     public function creator(): BelongsTo

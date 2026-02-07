@@ -128,7 +128,29 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('superadmin/announcements')->middleware('role:super-admin')->group(function () {
         Route::get('/', [AnnouncementController::class, 'getAllAnnouncements']); // Tracking semua announcements
         Route::post('/', [AnnouncementController::class, 'createGlobalAnnouncement']); // Create global announcement
+        Route::put('/{id}', [AnnouncementController::class, 'update']);
+        Route::delete('/{id}', [AnnouncementController::class, 'destroy']);
         Route::get('/tracking', [AnnouncementController::class, 'getAnnouncementTracking']); // Analytics
+    });
+
+    // =====================
+    // ANNOUNCEMENTS - Admin
+    // =====================
+    Route::prefix('admin/announcements')->middleware('role:admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\AdminAnnouncementController::class, 'index']); // Get all + mine
+        Route::post('/', [\App\Http\Controllers\API\AdminAnnouncementController::class, 'store']); // Create announcement
+        Route::put('/{id}', [\App\Http\Controllers\API\AdminAnnouncementController::class, 'update']); // Update
+        Route::delete('/{id}', [\App\Http\Controllers\API\AdminAnnouncementController::class, 'destroy']); // Delete
+    });
+
+    // =====================
+    // ANNOUNCEMENTS - Instructor
+    // =====================
+    Route::prefix('instructor/announcements')->middleware('role:instructor')->group(function () {
+        Route::get('/', [\App\Http\Controllers\API\InstructorAnnouncementController::class, 'index']); // Get all + mine
+        Route::post('/', [\App\Http\Controllers\API\InstructorAnnouncementController::class, 'store']); // Create announcement
+        Route::put('/{id}', [\App\Http\Controllers\API\InstructorAnnouncementController::class, 'update']); // Update
+        Route::delete('/{id}', [\App\Http\Controllers\API\InstructorAnnouncementController::class, 'destroy']); // Delete
     });
 
     // User Profile
