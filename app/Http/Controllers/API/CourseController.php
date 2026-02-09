@@ -136,7 +136,6 @@ class CourseController extends Controller
             'instructor:id,name,avatar',
             'enrollments.user:id,name,email,avatar,department',
             'students',
-            'certificateTemplate:id,name,category,preview_path'
         ])->findOrFail($id);
 
         // Enrich enrollment data with Moodle progress and activity
@@ -224,12 +223,6 @@ class CourseController extends Controller
             'end_date' => 'nullable|date',
             'is_active' => 'boolean',
             'instructor_id' => 'nullable|exists:users,id',
-            'certificate_template_id' => 'nullable|exists:certificate_templates,id',
-            'passing_grade' => 'nullable|numeric|min:0|max:100',
-            'certificate_criteria' => 'nullable|in:final_grade,specific_quiz,completion_and_grade',
-            'certificate_quiz_id' => 'nullable|integer',
-            'auto_issue_certificate' => 'nullable|boolean',
-            'certificate_issue_delay_days' => 'nullable|integer|min:0',
         ]);
 
         // Note: For now we only update local DB.
@@ -238,7 +231,7 @@ class CourseController extends Controller
 
         return response()->json([
             'message' => 'Kelas berhasil diperbarui',
-            'data' => $course->load('certificateTemplate')
+            'data' => $course
         ]);
     }
 
@@ -304,6 +297,12 @@ class CourseController extends Controller
 
                     $moodleUser = $moodleConn->table('user')->where('id', $moodleUserId)->first();
                     Log::info("Moodle user created with ID: {$moodleUserId}");
+                }
+
+                // Sync moodle_user_id back to local user record
+                if (!$user->moodle_user_id && $moodleUser) {
+                    $user->update(['moodle_user_id' => $moodleUser->id]);
+                    Log::info("Synced moodle_user_id {$moodleUser->id} to local user {$user->email}");
                 }
 
                 // 2. Find Course Context (contextlevel = 50 for Course)

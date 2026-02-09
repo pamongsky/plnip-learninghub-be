@@ -18,14 +18,11 @@ class Course extends Model
         'end_date',
         'is_active',
         'instructor_id',
-        'certificate_template_id',
-        'passing_grade',
-        'certificate_criteria',
-        'certificate_quiz_id',
-        'auto_issue_certificate',
-        'certificate_issue_delay_days',
         'category_id',
         'image',
+        'nomor_diklat',
+        'unit_penyelenggara',
+        'lokasi',
     ];
 
     protected $casts = [
@@ -63,13 +60,4 @@ class Course extends Model
         return $this->belongsTo(User::class, 'instructor_id');
     }
 
-    public function certificateTemplate()
-    {
-        return $this->belongsTo(CertificateTemplate::class, 'certificate_template_id');
-    }
-
-    public function certificates()
-    {
-        return $this->hasMany(Certificate::class);
-    }
 }

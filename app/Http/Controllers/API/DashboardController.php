@@ -7,25 +7,87 @@ use App\Models\Announcement;
 use App\Models\Course;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    /**
+     * Get today's announcements filtered by role for dashboard widget.
+     */
+    private function getTodayAnnouncements(Request $request, string $forRole): array
+    {
+        $today = Carbon::today();
+
+        $query = Announcement::where('published_at', '>=', $today)
+            ->where('published_at', '<', $today->copy()->addDay())
+            ->with(['creator:id,name,department,position']);
+
+        if ($forRole === 'user') {
+            $enrolledCourseIds = $request->user()->courses()->pluck('courses.id')->toArray();
+
+            $query->where(function ($q) use ($enrolledCourseIds) {
+                $q->where('scope', 'global')
+                  ->orWhere(function ($unitQ) use ($enrolledCourseIds) {
+                      $unitQ->where('scope', 'unit')
+                            ->where(function ($filterQ) use ($enrolledCourseIds) {
+                                $filterQ->where(function ($roleQ) {
+                                    $roleQ->whereNull('target_classes')
+                                          ->whereIn('target_role', ['all', 'user', 'learner']);
+                                });
+
+                                if (!empty($enrolledCourseIds)) {
+                                    $filterQ->orWhere(function ($classQ) use ($enrolledCourseIds) {
+                                        $classQ->whereNotNull('target_classes')
+                                               ->where(function ($jsonQ) use ($enrolledCourseIds) {
+                                                   $jsonQ->whereJsonContains('target_classes', 'all');
+                                                   foreach ($enrolledCourseIds as $courseId) {
+                                                       $jsonQ->orWhereJsonContains('target_classes', $courseId)
+                                                             ->orWhereJsonContains('target_classes', (string)$courseId);
+                                                   }
+                                               });
+                                    });
+                                }
+                            });
+                  });
+            });
+        } else {
+            // instructor
+            $query->where(function ($q) {
+                $q->where('scope', 'global')
+                  ->orWhere(function ($unitQ) {
+                      $unitQ->where('scope', 'unit')
+                            ->whereNull('target_classes')
+                            ->whereIn('target_role', ['all', 'instructor']);
+                  });
+            });
+        }
+
+        return $query->orderByRaw("CASE priority
+            WHEN 'urgent' THEN 1
+            WHEN 'high' THEN 2
+            WHEN 'normal' THEN 3
+            WHEN 'medium' THEN 3
+            WHEN 'low' THEN 4
+            ELSE 5 END ASC")
+            ->orderBy('published_at', 'desc')
+            ->get()
+            ->map(function ($ann) {
+                return [
+                    'id' => $ann->id,
+                    'title' => $ann->title,
+                    'content' => $ann->content,
+                    'priority' => $ann->priority,
+                    'created_by' => $ann->creator?->name ?? 'Unknown',
+                    'published_at' => $ann->published_at,
+                ];
+            })
+            ->toArray();
+    }
+
     public function employeeDashboard(Request $request)
     {
         $user = $request->user();
-
-        // Latest announcements
-        $announcements = Announcement::where('is_active', true)
-            ->where(function ($q) {
-                $q->whereNull('published_at')
-                  ->orWhere('published_at', '<=', now());
-            })
-            ->with('creator:id,name,department,position')
-            ->orderBy('priority', 'desc')
-            ->orderBy('published_at', 'desc')
-            ->limit(5)
-            ->get();
 
         // Statistics (will be dynamic when course system is implemented)
         $stats = [
@@ -71,6 +133,9 @@ class DashboardController extends Controller
             ],
         ];
 
+        // Today's announcements
+        $announcements = $this->getTodayAnnouncements($request, 'user');
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -84,9 +149,9 @@ class DashboardController extends Controller
                 ],
                 'stats' => $stats,
                 'quick_stats' => $quickStats,
-                'announcements' => $announcements,
                 'course_progress' => $courseProgress,
                 'recent_activities' => $recentActivities,
+                'announcements' => $announcements,
             ],
         ], 200);
     }
@@ -94,18 +159,6 @@ class DashboardController extends Controller
     public function instructorDashboard(Request $request)
     {
         $user = $request->user();
-
-        // Latest announcements
-        $announcements = Announcement::where('is_active', true)
-            ->where(function ($q) {
-                $q->whereNull('published_at')
-                  ->orWhere('published_at', '<=', now());
-            })
-            ->with('creator:id,name,department,position')
-            ->orderBy('priority', 'desc')
-            ->orderBy('published_at', 'desc')
-            ->limit(5)
-            ->get();
 
         // Get instructor's courses from Moodle
         $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
@@ -244,6 +297,9 @@ class DashboardController extends Controller
             }
         }
 
+        // Today's announcements
+        $announcements = $this->getTodayAnnouncements($request, 'instructor');
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -253,8 +309,8 @@ class DashboardController extends Controller
                     'completed_classes' => $completedClasses,
                     'average_attendance' => $averageAttendance,
                 ],
-                'announcements' => $announcements,
                 'classes' => $mapCourses->values(),
+                'announcements' => $announcements,
             ],
         ], 200);
     }

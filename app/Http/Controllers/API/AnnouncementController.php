@@ -23,8 +23,7 @@ class AnnouncementController extends Controller
         // 2. UNIT (Admin): Visible if target_role matches user role or 'all'
         // 3. CLASS (Instructor): Visible if user enrolled in target_classes or 'all'
         
-        $userRole = $request->user()->hasRole('instructor') ? 'instructor' : 'user'; // Simplified role check
-        // Or better: $userRole = $request->user()->roles->first()?->name ?? 'user';
+        $userRole = $request->user()->hasRole('instructor') ? 'instructor' : 'user';
         
         // Get user's enrolled course IDs if they are a student
         $enrolledCourseIds = [];
@@ -33,39 +32,44 @@ class AnnouncementController extends Controller
         }
 
         $query->where(function ($q) use ($userRole, $enrolledCourseIds) {
-            // 1. Global Announcements
+            // 1. Global Announcements (from super-admin, visible to everyone)
             $q->where('scope', 'global')
-            
-            // 2. Local/Unit/Class Announcements
+
+            // 2. Unit Announcements
               ->orWhere(function ($unitQ) use ($userRole, $enrolledCourseIds) {
                   $unitQ->where('scope', 'unit')
                         ->where(function ($filterQ) use ($userRole, $enrolledCourseIds) {
-                            
-                            // A. Role-based Targeting (usually from Admin)
-                            // If target_classes IS NULL, it's likely a role-based announcement
-                            $filterQ->where(function ($roleQ) use ($userRole) {
+
+                            // A. Role-based Targeting (from Admin, no target_classes)
+                            //    Match if target_role = 'all' or matches current user role
+                            // 'learner' is legacy alias for 'user'
+                            $roleMatches = ['all', $userRole];
+                            if ($userRole === 'user') {
+                                $roleMatches[] = 'learner';
+                            }
+
+                            $filterQ->where(function ($roleQ) use ($roleMatches) {
                                 $roleQ->whereNull('target_classes')
-                                      ->whereIn('target_role', ['all', $userRole]);
-                            })
-                            
-                            // B. Class-based Targeting (usually from Instructor)
-                            // Only relevant if user is a student (role='user') and has enrollments
-                            ->orWhere(function ($classQ) use ($enrolledCourseIds) {
-                                $classQ->whereNotNull('target_classes')
-                                       ->where(function ($jsonQ) use ($enrolledCourseIds) {
-                                           // Check if 'all' classes targeted
-                                           $jsonQ->whereJsonContains('target_classes', 'all');
-                                           
-                                           // OR Check if enrolled course is targeted
-                                           if (!empty($enrolledCourseIds)) {
+                                      ->whereIn('target_role', $roleMatches);
+                            });
+
+                            // B. Class-based Targeting (from Instructor, has target_classes)
+                            //    ONLY for students/users — instructor should NOT see these
+                            if ($userRole === 'user' && !empty($enrolledCourseIds)) {
+                                $filterQ->orWhere(function ($classQ) use ($enrolledCourseIds) {
+                                    $classQ->whereNotNull('target_classes')
+                                           ->where(function ($jsonQ) use ($enrolledCourseIds) {
+                                               // 'all' classes targeted
+                                               $jsonQ->whereJsonContains('target_classes', 'all');
+
+                                               // OR specific enrolled course targeted
                                                foreach ($enrolledCourseIds as $courseId) {
-                                                    // Check string or int type in JSON
                                                    $jsonQ->orWhereJsonContains('target_classes', $courseId)
                                                          ->orWhereJsonContains('target_classes', (string)$courseId);
                                                }
-                                           }
-                                       });
-                            });
+                                           });
+                                });
+                            }
                         });
               });
         });
@@ -167,11 +171,48 @@ class AnnouncementController extends Controller
     {
         $limit = $request->input('limit', 5);
 
+        $user = $request->user();
+        $userRole = $user?->hasRole('instructor') ? 'instructor' : 'user';
+
+        $enrolledCourseIds = [];
+        if ($userRole === 'user' && $user) {
+            $enrolledCourseIds = $user->courses()->pluck('courses.id')->toArray();
+        }
+
         $announcements = Announcement::active()
             ->with(['creator:id,name,department,position', 'creator.roles'])
-            ->where(function ($q) {
+            ->where(function ($q) use ($userRole, $enrolledCourseIds) {
+                // Global: visible to everyone
                 $q->where('scope', 'global')
-                  ->orWhere('scope', 'unit');
+                  // Unit: role-based (from admin)
+                  ->orWhere(function ($unitQ) use ($userRole, $enrolledCourseIds) {
+                      $unitQ->where('scope', 'unit')
+                            ->where(function ($filterQ) use ($userRole, $enrolledCourseIds) {
+                                $roleMatches = ['all', $userRole];
+                                if ($userRole === 'user') {
+                                    $roleMatches[] = 'learner';
+                                }
+
+                                $filterQ->where(function ($roleQ) use ($roleMatches) {
+                                    $roleQ->whereNull('target_classes')
+                                          ->whereIn('target_role', $roleMatches);
+                                });
+
+                                // Class-based: only for students
+                                if ($userRole === 'user' && !empty($enrolledCourseIds)) {
+                                    $filterQ->orWhere(function ($classQ) use ($enrolledCourseIds) {
+                                        $classQ->whereNotNull('target_classes')
+                                               ->where(function ($jsonQ) use ($enrolledCourseIds) {
+                                                   $jsonQ->whereJsonContains('target_classes', 'all');
+                                                   foreach ($enrolledCourseIds as $courseId) {
+                                                       $jsonQ->orWhereJsonContains('target_classes', $courseId)
+                                                             ->orWhereJsonContains('target_classes', (string)$courseId);
+                                                   }
+                                               });
+                                    });
+                                }
+                            });
+                  });
             })
             ->orderByRaw("CASE priority 
             WHEN 'urgent' THEN 1 

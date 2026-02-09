@@ -25,7 +25,10 @@ class AdminAnnouncementController extends Controller
             WHEN 'low' THEN 4 
             ELSE 5 END ASC";
         
-        // Get all announcements accessible by admin
+        // Admin sees:
+        // - Global (from super-admin)
+        // - Unit announcements (from admin, including other admins)
+        // - Instructor's class-targeted announcements (for tracking/monitoring)
         $all = Announcement::with(['creator:id,name,department,position', 'creator.roles'])
             ->active()
             ->orderByRaw($prioritySort)

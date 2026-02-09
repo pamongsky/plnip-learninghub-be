@@ -25,12 +25,20 @@ class InstructorAnnouncementController extends Controller
             WHEN 'low' THEN 4 
             ELSE 5 END ASC";
 
-        // Get all active announcements
+        // Get announcements visible to instructor:
+        // - Global (from super-admin, visible to everyone)
+        // - Unit where target_role = 'all' or 'instructor' (from admin)
+        // - NOT unit where target_role = 'user' (that's user-only)
+        // - NOT class-targeted (those are for students, made by other instructors)
         $all = Announcement::with(['creator:id,name,department,position', 'creator.roles'])
             ->active()
             ->where(function ($q) {
                 $q->where('scope', 'global')
-                  ->orWhere('scope', 'unit');
+                  ->orWhere(function ($unitQ) {
+                      $unitQ->where('scope', 'unit')
+                            ->whereNull('target_classes')
+                            ->whereIn('target_role', ['all', 'instructor']);
+                  });
             })
             ->orderByRaw($prioritySort)
             ->orderBy('published_at', 'desc')
@@ -90,7 +98,7 @@ class InstructorAnnouncementController extends Controller
                 'priority' => $validated['priority'],
                 'scope' => 'unit',
                 'target_role' => 'user', // Instructor always targets users (students)
-                'target_classes' => json_encode($targetClasses),
+                'target_classes' => $targetClasses,
                 'created_by' => auth()->id(),
                 'published_at' => $validated['published_at'] ?? now(),
                 'expires_at' => $validated['expires_at'] ?? null,
@@ -138,7 +146,7 @@ class InstructorAnnouncementController extends Controller
             if (in_array('all', $targetClasses)) {
                 $targetClasses = ['all'];
             }
-            $validated['target_classes'] = json_encode($targetClasses);
+            $validated['target_classes'] = $targetClasses;
         }
 
         $announcement->update($validated);

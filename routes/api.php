@@ -265,37 +265,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [\App\Http\Controllers\Api\CourseController::class, 'update']);
         Route::post('/{id}/enroll', [\App\Http\Controllers\Api\CourseController::class, 'enrollUser']);
         Route::delete('/{id}/enroll/{userId}', [\App\Http\Controllers\Api\CourseController::class, 'unenrollUser']);
+        Route::post('/{id}/upload-certificate/{userId}', [\App\Http\Controllers\API\CertificateController::class, 'uploadForUser'])->middleware('role:admin|super-admin');
+        Route::post('/{id}/upload-certificates-zip', [\App\Http\Controllers\API\CertificateController::class, 'uploadBulkZip'])->middleware('role:admin|super-admin');
     });
 
     // =====================
-    // CERTIFICATE TEMPLATE MANAGEMENT (Admin & Super Admin)
-    // =====================
-    Route::prefix('certificate-templates')->middleware('role:admin|super-admin')->group(function () {
-        Route::get('/', [\App\Http\Controllers\API\CertificateTemplateController::class, 'index']);
-        Route::get('/variables', [\App\Http\Controllers\API\CertificateTemplateController::class, 'getAvailableVariables']);
-        Route::get('/categories', [\App\Http\Controllers\API\CertificateTemplateController::class, 'getCategories']);
-        Route::get('/{template}', [\App\Http\Controllers\API\CertificateTemplateController::class, 'show']);
-        Route::post('/', [\App\Http\Controllers\API\CertificateTemplateController::class, 'store']);
-        Route::post('/{template}', [\App\Http\Controllers\API\CertificateTemplateController::class, 'update']);
-        Route::delete('/{template}', [\App\Http\Controllers\API\CertificateTemplateController::class, 'destroy']);
-    });
-
-    // =====================
-    // CERTIFICATES
+    // CERTIFICATES (User)
     // =====================
     Route::prefix('certificates')->group(function () {
-        Route::get('/', [\App\Http\Controllers\API\CertificateController::class, 'index']); // My certificates
-        Route::get('/verify', [\App\Http\Controllers\API\CertificateController::class, 'verify']); // Public verification
-        Route::get('/{id}', [\App\Http\Controllers\API\CertificateController::class, 'show']);
+        Route::get('/', [\App\Http\Controllers\API\CertificateController::class, 'index']);
         Route::get('/{id}/download', [\App\Http\Controllers\API\CertificateController::class, 'download']);
     });
 
     // Admin certificate management
     Route::prefix('admin/certificates')->middleware('role:admin|super-admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\API\CertificateController::class, 'getAllCertificates']);
-        Route::get('/stats', [\App\Http\Controllers\API\CertificateController::class, 'stats']);
         Route::patch('/{id}/revoke', [\App\Http\Controllers\API\CertificateController::class, 'revoke']);
-        Route::patch('/{id}/restore', [\App\Http\Controllers\API\CertificateController::class, 'restore']);
     });
 
     // =====================

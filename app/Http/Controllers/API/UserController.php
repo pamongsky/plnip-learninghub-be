@@ -224,6 +224,7 @@ class UserController extends \App\Http\Controllers\Controller
             'position' => 'nullable|string',
             'role' => 'sometimes|string|in:super-admin,admin,instructor,user',
             'is_active' => 'sometimes|boolean',
+            'password' => 'nullable|string|min:8',
             'reason' => 'nullable|string',
         ]);
 

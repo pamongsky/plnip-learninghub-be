@@ -189,7 +189,18 @@ class ProfileController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'current_password' => ['required', 'current_password'],
-                'password' => ['required', 'confirmed', Password::defaults()],
+                'password' => [
+                    'required',
+                    'confirmed',
+                    'min:8',
+                    'regex:/[a-z]/',      // must contain lowercase
+                    'regex:/[A-Z]/',      // must contain uppercase
+                    'regex:/[0-9]/',      // must contain number
+                    'regex:/[@$!%*#?&]/', // must contain special char
+                ],
+            ], [
+                'password.regex' => 'Password harus mengandung huruf besar, huruf kecil, angka, dan karakter spesial (@$!%*#?&)',
+                'password.min' => 'Password minimal 8 karakter',
             ]);
 
             if ($validator->fails()) {

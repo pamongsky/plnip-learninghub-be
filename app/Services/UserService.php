@@ -115,12 +115,21 @@ class UserService
 
         // Track changes
         foreach ($data as $key => $value) {
-            if ($user->$key !== $value) {
+            if ($key !== 'password' && $user->$key !== $value) {
                 $changes[$key] = [
                     'old' => $user->$key,
                     'new' => $value,
                 ];
             }
+        }
+
+        // Handle password change
+        if (isset($data['password']) && !empty($data['password'])) {
+            $data['password'] = Hash::make($data['password']);
+            $changes['password'] = ['old' => '***', 'new' => '*** (changed)'];
+        } else {
+            // Remove password from data if empty/null
+            unset($data['password']);
         }
 
         // Separate role dari data lain
