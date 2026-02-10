@@ -16,14 +16,12 @@ class InstructorAnnouncementController extends Controller
     {
         $user = $request->user();
 
-        // Helper for priority sorting
+        // Priority sorting: Penting > Umum > Informasi
         $prioritySort = "CASE priority 
-            WHEN 'urgent' THEN 1 
-            WHEN 'high' THEN 2 
-            WHEN 'normal' THEN 3 
-            WHEN 'medium' THEN 3 
-            WHEN 'low' THEN 4 
-            ELSE 5 END ASC";
+            WHEN 'penting' THEN 1 
+            WHEN 'umum' THEN 2 
+            WHEN 'informasi' THEN 3 
+            ELSE 4 END ASC";
 
         // Get announcements visible to instructor:
         // - Global (from super-admin, visible to everyone)
@@ -76,7 +74,7 @@ class InstructorAnnouncementController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string|min:3',
-            'priority' => 'required|in:low,normal,medium,high,urgent',
+            'priority' => 'required|in:informasi,umum,penting',
             'target_classes' => 'nullable|array', // Can be ['all'] or [1, 2, 3]
             'target_classes.*' => 'nullable', // Don't validate individual IDs, allow 'all'
             'published_at' => 'nullable|date',
@@ -133,7 +131,7 @@ class InstructorAnnouncementController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string|min:3',
-            'priority' => 'required|in:low,medium,high',
+            'priority' => 'required|in:informasi,umum,penting',
             'target_classes' => 'nullable|array',
             'target_classes.*' => 'nullable',
             'published_at' => 'nullable|date',

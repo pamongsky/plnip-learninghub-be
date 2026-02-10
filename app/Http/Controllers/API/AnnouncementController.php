@@ -85,14 +85,12 @@ class AnnouncementController extends Controller
             });
         }
 
-        // Fix: Custom sort agar Urgent paling atas
+        // Sort: Penting > Umum > Informasi
         $announcements = $query->orderByRaw("CASE priority 
-            WHEN 'urgent' THEN 1 
-            WHEN 'high' THEN 2 
-            WHEN 'normal' THEN 3 
-            WHEN 'medium' THEN 3 
-            WHEN 'low' THEN 4 
-            ELSE 5 END ASC")
+            WHEN 'penting' THEN 1 
+            WHEN 'umum' THEN 2 
+            WHEN 'informasi' THEN 3 
+            ELSE 4 END ASC")
             ->orderBy('published_at', 'desc')
             ->paginate($perPage);
 
@@ -215,12 +213,10 @@ class AnnouncementController extends Controller
                   });
             })
             ->orderByRaw("CASE priority 
-            WHEN 'urgent' THEN 1 
-            WHEN 'high' THEN 2 
-            WHEN 'normal' THEN 3 
-            WHEN 'medium' THEN 3 
-            WHEN 'low' THEN 4 
-            ELSE 5 END ASC")
+            WHEN 'penting' THEN 1 
+            WHEN 'umum' THEN 2 
+            WHEN 'informasi' THEN 3 
+            ELSE 4 END ASC")
             ->orderBy('published_at', 'desc')
             ->limit($limit)
             ->get();
@@ -294,7 +290,7 @@ class AnnouncementController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string|min:3',
-            'priority' => 'required|in:low,normal,medium,high,urgent',
+            'priority' => 'required|in:informasi,umum,penting',
             'published_at' => 'nullable|date',
             'expires_at' => 'nullable|date|after:published_at',
         ]);
@@ -338,9 +334,9 @@ class AnnouncementController extends Controller
             'total_announcements' => Announcement::count(),
             'active_announcements' => Announcement::where('is_active', true)->count(),
             'by_priority' => [
-                'high' => Announcement::where('priority', 'high')->count(),
-                'medium' => Announcement::where('priority', 'medium')->count(),
-                'low' => Announcement::where('priority', 'low')->count(),
+                'penting' => Announcement::where('priority', 'penting')->count(),
+                'umum' => Announcement::where('priority', 'umum')->count(),
+                'informasi' => Announcement::where('priority', 'informasi')->count(),
             ],
             'by_creator_role' => Announcement::with('creator.roles')
                 ->get()
@@ -377,7 +373,7 @@ class AnnouncementController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string|min:3',
-            'priority' => 'required|in:low,normal,medium,high,urgent',
+            'priority' => 'required|in:informasi,umum,penting',
             'published_at' => 'nullable|date',
             'expires_at' => 'nullable|date|after:published_at',
         ]);

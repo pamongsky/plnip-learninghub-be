@@ -16,14 +16,12 @@ class AdminAnnouncementController extends Controller
     {
         $user = $request->user();
 
-        // Helper for priority sorting
+        // Priority sorting: Penting > Umum > Informasi
         $prioritySort = "CASE priority 
-            WHEN 'urgent' THEN 1 
-            WHEN 'high' THEN 2 
-            WHEN 'normal' THEN 3 
-            WHEN 'medium' THEN 3 
-            WHEN 'low' THEN 4 
-            ELSE 5 END ASC";
+            WHEN 'penting' THEN 1 
+            WHEN 'umum' THEN 2 
+            WHEN 'informasi' THEN 3 
+            ELSE 4 END ASC";
         
         // Admin sees:
         // - Global (from super-admin)
@@ -67,7 +65,7 @@ class AdminAnnouncementController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string|min:3',
-            'priority' => 'required|in:low,normal,medium,high,urgent',
+            'priority' => 'required|in:informasi,umum,penting',
             'target_role' => 'required|in:all,user,instructor',
             'published_at' => 'nullable|date',
             'expires_at' => 'nullable|date|after:published_at',
@@ -114,7 +112,7 @@ class AdminAnnouncementController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'content' => 'required|string|min:3',
-            'priority' => 'required|in:low,medium,high',
+            'priority' => 'required|in:informasi,umum,penting',
             'target_role' => 'required|in:all,user,instructor',
             'published_at' => 'nullable|date',
             'expires_at' => 'nullable|date|after:published_at',

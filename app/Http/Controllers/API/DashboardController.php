@@ -64,12 +64,10 @@ class DashboardController extends Controller
         }
 
         return $query->orderByRaw("CASE priority
-            WHEN 'urgent' THEN 1
-            WHEN 'high' THEN 2
-            WHEN 'normal' THEN 3
-            WHEN 'medium' THEN 3
-            WHEN 'low' THEN 4
-            ELSE 5 END ASC")
+            WHEN 'penting' THEN 1
+            WHEN 'umum' THEN 2
+            WHEN 'informasi' THEN 3
+            ELSE 4 END ASC")
             ->orderBy('published_at', 'desc')
             ->get()
             ->map(function ($ann) {
