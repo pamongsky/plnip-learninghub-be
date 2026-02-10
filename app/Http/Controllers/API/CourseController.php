@@ -420,12 +420,6 @@ class CourseController extends Controller
                 ]);
             }
 
-            // Auto-assign instructor_id if enrolling as teacher
-            if (in_array($roleId, [3, 4]) && !$course->instructor_id) {
-                $course->update(['instructor_id' => $user->id]);
-                Log::info("Auto-assigned instructor_id {$user->id} to course {$course->id}");
-            }
-
             DB::commit();
 
             return response()->json([

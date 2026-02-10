@@ -338,108 +338,312 @@ class AIAssistantController extends Controller
     }
 
     /**
-     * Get available features based on user role
+     * Get ALL features across all roles so AI understands the entire platform
      */
     private function getAvailableFeatures(User $user): array
     {
-        $baseFeatures = [
-            [
-                'name' => 'Dashboard',
-                'description' => 'Lihat ringkasan aktivitas belajar Anda',
-                'path' => '/dashboard',
+        $features = [];
+
+        // ===== USER/EMPLOYEE FEATURES =====
+        $features[] = [
+            'name' => 'Dashboard User',
+            'description' => 'Ringkasan aktivitas belajar: kelas aktif, progress, pengumuman terbaru, sertifikat',
+            'path' => '/dashboard',
+            'roles' => ['employee', 'user'],
+            'how_to' => ['Otomatis muncul setelah login sebagai user/employee'],
+        ];
+        $features[] = [
+            'name' => 'Kelas Saya',
+            'description' => 'Daftar kelas yang diikuti user. Bisa akses Moodle untuk belajar, lihat progress, lihat materi',
+            'path' => '/dashboard/classes',
+            'roles' => ['employee', 'user'],
+            'how_to' => [
+                'Klik menu "Kelas Saya" di sidebar',
+                'Klik salah satu kelas untuk melihat detail',
+                'Klik "Buka di Moodle" untuk masuk ke LMS dan belajar',
+                'Progress otomatis terupdate dari Moodle',
             ],
-            [
-                'name' => 'Kelas Saya',
-                'description' => 'Akses kelas yang Anda ikuti',
-                'path' => '/dashboard/classes',
+        ];
+        $features[] = [
+            'name' => 'Sertifikat',
+            'description' => 'Lihat dan download sertifikat yang sudah diterbitkan setelah menyelesaikan kelas',
+            'path' => '/dashboard/certificates',
+            'roles' => ['employee', 'user'],
+            'how_to' => [
+                'Klik menu "Sertifikat" di sidebar',
+                'Sertifikat muncul setelah admin meng-upload sertifikat untuk kelas yang sudah selesai',
+                'Klik "Download" untuk mengunduh file PDF sertifikat',
             ],
-            [
-                'name' => 'Sertifikat',
-                'description' => 'Lihat dan download sertifikat Anda',
-                'path' => '/dashboard/certificates',
+        ];
+        $features[] = [
+            'name' => 'Support Ticket (User)',
+            'description' => 'Buat tiket bantuan untuk kendala teknis, pembelajaran, sertifikat, atau lainnya',
+            'path' => '/dashboard/support',
+            'roles' => ['employee', 'user'],
+            'how_to' => [
+                'Klik menu "Support Ticket" di sidebar',
+                'Klik tombol "Buat Tiket Baru"',
+                'Pilih kategori masalah',
+                'Isi subjek dan deskripsi masalah dengan jelas',
+                'Upload screenshot jika perlu',
+                'Klik "Kirim Tiket"',
+                'Admin/Super Admin akan merespon di halaman tiket',
             ],
-            [
-                'name' => 'Support Ticket',
-                'description' => 'Buat tiket bantuan untuk kendala teknis',
-                'path' => '/dashboard/support',
-                'how_to' => [
-                    'Klik menu "Support" di sidebar',
-                    'Klik tombol "Buat Tiket Baru"',
-                    'Pilih kategori masalah (Teknis, Pembelajaran, Sertifikat, dll)',
-                    'Isi subjek dan deskripsi masalah',
-                    'Upload screenshot jika perlu',
-                    'Klik "Kirim Tiket"',
-                    'Tim support akan merespon dalam 1-2 jam kerja',
-                ],
+        ];
+        $features[] = [
+            'name' => 'Profil',
+            'description' => 'Edit profil, upload avatar, ganti password',
+            'path' => '/dashboard/profile',
+            'roles' => ['employee', 'user'],
+            'how_to' => [
+                'Klik menu "Profil" atau klik avatar di sidebar bawah',
+                'Edit nama, email, department, posisi',
+                'Upload foto profil (avatar)',
+                'Ganti password di tab "Keamanan"',
             ],
-            [
-                'name' => 'Pengumuman',
-                'description' => 'Baca pengumuman terbaru dari admin',
-                'path' => '/dashboard/announcements',
+        ];
+        $features[] = [
+            'name' => 'Pengumuman',
+            'description' => 'Baca pengumuman dari admin, super admin, atau instructor',
+            'path' => '/dashboard',
+            'roles' => ['employee', 'user'],
+        ];
+        $features[] = [
+            'name' => 'Chat / AI Assistant',
+            'description' => 'Chat dengan AI untuk bertanya apapun: pertanyaan umum, navigasi platform, materi kelas, dll',
+            'path' => 'Tombol chat di pojok kanan bawah',
+            'roles' => ['all'],
+            'how_to' => [
+                'Klik ikon chat di pojok kanan bawah layar',
+                'Ketik pertanyaan apapun',
+                'AI bisa membantu: pertanyaan umum, cara pakai fitur, penjelasan materi, dll',
+                'Riwayat chat tersimpan, bisa dilanjutkan nanti',
             ],
-            [
-                'name' => 'Profil',
-                'description' => 'Edit profil dan ganti password',
-                'path' => '/dashboard/profile',
+        ];
+        $features[] = [
+            'name' => 'Direct Message',
+            'description' => 'Kirim pesan langsung ke user lain (instructor, admin, sesama peserta)',
+            'path' => '/dashboard/messages atau /instructor/messages',
+            'roles' => ['all'],
+            'how_to' => [
+                'Klik menu "Pesan" di sidebar',
+                'Klik "Mulai Percakapan Baru"',
+                'Cari user yang ingin diajak chat',
+                'Ketik pesan dan kirim',
             ],
         ];
 
-        // Add role-specific features
-        if ($user->hasRole(['instructor', 'Instructor'])) {
-            $baseFeatures[] = [
-                'name' => 'Kelola Kelas (Instructor)',
-                'description' => 'Kelola kelas yang Anda ajar',
-                'path' => '/instructor/classes',
-            ];
-        }
+        // ===== INSTRUCTOR FEATURES =====
+        $features[] = [
+            'name' => 'Dashboard Instructor',
+            'description' => 'Ringkasan: kelas yang diajar, jumlah peserta, statistik pertanyaan',
+            'path' => '/instructor',
+            'roles' => ['instructor'],
+        ];
+        $features[] = [
+            'name' => 'Manajemen Kelas (Instructor)',
+            'description' => 'Lihat detail kelas yang diajar, daftar peserta, progress peserta, upload sertifikat',
+            'path' => '/instructor/classes',
+            'roles' => ['instructor'],
+            'how_to' => [
+                'Klik menu "Manajemen Kelas" di sidebar',
+                'Pilih kelas untuk melihat detail',
+                'Tab "Peserta" menampilkan daftar peserta enrolled',
+                'Klik 3-dot menu (⋮) di setiap peserta untuk: Lihat Progress, Upload Sertifikat',
+                'Progress menampilkan: progress keseluruhan, aktivitas selesai, nilai, last access',
+            ],
+        ];
+        $features[] = [
+            'name' => 'Class Group Chat',
+            'description' => 'Forum chat per kelas untuk diskusi antara instructor dan peserta',
+            'path' => '/instructor/classes/[id] → tab Chat',
+            'roles' => ['instructor', 'employee'],
+            'how_to' => [
+                'Buka detail kelas',
+                'Klik tab "Chat Kelas"',
+                'Kirim pesan untuk diskusi',
+                'Instructor bisa menandai pertanyaan sebagai "Terjawab"',
+            ],
+        ];
+        $features[] = [
+            'name' => 'Pengumuman Instructor',
+            'description' => 'Buat pengumuman khusus untuk peserta kelas yang diajar',
+            'path' => '/instructor/announcements',
+            'roles' => ['instructor'],
+            'how_to' => [
+                'Klik menu "Pengumuman" di sidebar',
+                'Klik "Buat Pengumuman Baru"',
+                'Isi judul, konten, dan pilih tingkat prioritas',
+                'Pengumuman akan muncul di dashboard peserta',
+            ],
+        ];
 
-        if ($user->hasRole(['admin', 'Admin', 'super-admin', 'superadmin'])) {
-            $baseFeatures[] = [
-                'name' => 'User Management',
-                'description' => 'Kelola pengguna sistem',
-                'path' => '/admin/users',
-            ];
-            $baseFeatures[] = [
-                'name' => 'Course Management',
-                'description' => 'Kelola kelas dan materi',
-                'path' => '/admin/courses',
-            ];
-        }
+        // ===== ADMIN FEATURES =====
+        $features[] = [
+            'name' => 'Dashboard Admin',
+            'description' => 'Ringkasan: total user, kelas aktif, enrollment terbaru, statistik',
+            'path' => '/admin',
+            'roles' => ['admin'],
+        ];
+        $features[] = [
+            'name' => 'Kelola User (Admin)',
+            'description' => 'Lihat daftar user di department admin, read-only',
+            'path' => '/admin/users',
+            'roles' => ['admin'],
+        ];
+        $features[] = [
+            'name' => 'Manajemen Kelas (Admin)',
+            'description' => 'Kelola kelas: sync dari Moodle, enroll peserta, ubah role, lihat progress, upload sertifikat',
+            'path' => '/admin/courses',
+            'roles' => ['admin'],
+            'how_to' => [
+                'Klik menu "Manajemen Kelas" di sidebar',
+                'Klik "Sync Moodle" untuk sinkronisasi kelas dari Moodle LMS',
+                'Klik salah satu kelas untuk melihat detail',
+                'Klik "Enroll Siswa" untuk mendaftarkan peserta baru (bisa multi-select)',
+                'Pilih role Moodle saat enroll: Student, Editing Teacher, Non-Editing Teacher, Course Creator, Manager',
+                'Klik 3-dot menu (⋮) di setiap peserta untuk: Ubah Role, Lihat Progress, Upload Sertifikat, Hapus Peserta',
+                'Tab "Informasi Kelas" untuk edit detail kelas',
+                'Upload sertifikat individual (PDF) atau bulk (ZIP)',
+            ],
+        ];
+        $features[] = [
+            'name' => 'Pengumuman Admin',
+            'description' => 'Buat pengumuman untuk semua user di department admin',
+            'path' => '/admin/announcements',
+            'roles' => ['admin'],
+        ];
+        $features[] = [
+            'name' => 'Support Ticket (Admin)',
+            'description' => 'Kelola tiket bantuan dari user, reply, eskalasi ke super admin',
+            'path' => '/admin/support',
+            'roles' => ['admin'],
+            'how_to' => [
+                'Klik menu "Support Ticket" di sidebar',
+                'Lihat daftar tiket yang masuk',
+                'Klik tiket untuk melihat detail dan membalas',
+                'Ubah status tiket (Open, In Progress, Resolved, Closed)',
+                'Eskalasi ke Super Admin jika perlu bantuan lebih',
+            ],
+        ];
+        $features[] = [
+            'name' => 'Eskalasi ke Super Admin',
+            'description' => 'Eskalasi tiket support yang tidak bisa diselesaikan ke super admin',
+            'path' => '/admin/escalations',
+            'roles' => ['admin'],
+        ];
 
-        return $baseFeatures;
+        // ===== SUPER ADMIN FEATURES =====
+        $features[] = [
+            'name' => 'Dashboard Super Admin',
+            'description' => 'Ringkasan seluruh platform: total user, kelas, enrollment, statistik global',
+            'path' => '/superadmin',
+            'roles' => ['super-admin'],
+        ];
+        $features[] = [
+            'name' => 'Kelola User (Super Admin)',
+            'description' => 'CRUD user, override role, lihat audit history, sync dari ERP',
+            'path' => '/superadmin/users',
+            'roles' => ['super-admin'],
+            'how_to' => [
+                'Klik menu "Kelola User" di sidebar',
+                'Tambah user baru, edit, atau hapus user',
+                'Override role user (employee, instructor, admin, super-admin)',
+                'Klik "Sync ERP" untuk sinkronisasi data user dari sistem ERP PLN IP',
+                'Lihat audit history perubahan data user',
+            ],
+        ];
+        $features[] = [
+            'name' => 'Role & Permission (Super Admin)',
+            'description' => 'Kelola role dan permission menggunakan Spatie Permission',
+            'path' => '/superadmin/roles',
+            'roles' => ['super-admin'],
+        ];
+        $features[] = [
+            'name' => 'Pengumuman Super Admin',
+            'description' => 'Buat pengumuman global untuk seluruh platform',
+            'path' => '/superadmin/announcements',
+            'roles' => ['super-admin'],
+        ];
+        $features[] = [
+            'name' => 'Moodle Sync (Super Admin)',
+            'description' => 'Sinkronisasi data users, courses, enrollments, categories dari/ke Moodle LMS',
+            'path' => '/superadmin/moodle-sync',
+            'roles' => ['super-admin'],
+        ];
+        $features[] = [
+            'name' => 'CMS Landing Page',
+            'description' => 'Kelola konten landing page: hero images, login background, pimpinan, partner',
+            'path' => '/superadmin/home',
+            'roles' => ['super-admin'],
+        ];
+        $features[] = [
+            'name' => 'Kelola Pimpinan',
+            'description' => 'CRUD data pimpinan PLN IP yang ditampilkan di landing page',
+            'path' => '/superadmin/leaders',
+            'roles' => ['super-admin'],
+        ];
+        $features[] = [
+            'name' => 'Kelola Partner',
+            'description' => 'CRUD data partner/mitra yang ditampilkan di landing page',
+            'path' => '/superadmin/partners',
+            'roles' => ['super-admin'],
+        ];
+        $features[] = [
+            'name' => 'Eskalasi Tiket (Super Admin)',
+            'description' => 'Tangani tiket yang di-eskalasi admin, reply dan resolve',
+            'path' => '/superadmin/escalations',
+            'roles' => ['super-admin'],
+        ];
+        $features[] = [
+            'name' => 'Activity Log',
+            'description' => 'Lihat log aktivitas seluruh user di platform',
+            'path' => '/superadmin/activity-log',
+            'roles' => ['super-admin'],
+        ];
+
+        return $features;
     }
 
     /**
-     * Get navigation menu structure
+     * Get navigation menu structure for ALL roles
      */
     private function getNavigationMenu(User $user): array
     {
-        if ($user->hasRole(['admin', 'Admin', 'super-admin', 'superadmin'])) {
-            return [
-                'Dashboard' => '/admin',
-                'Users' => '/admin/users',
-                'Courses' => '/admin/courses',
-                'Support Tickets' => '/admin/support',
-                'Announcements' => '/admin/announcements',
-                'Reports' => '/admin/reports',
-            ];
-        }
-
-        if ($user->hasRole(['instructor', 'Instructor'])) {
-            return [
-                'Dashboard' => '/instructor',
-                'My Classes' => '/instructor/classes',
-                'Messages' => '/instructor/messages',
-                'Announcements' => '/instructor/announcements',
-            ];
-        }
-
         return [
-            'Dashboard' => '/dashboard',
-            'My Classes' => '/dashboard/classes',
-            'Certificates' => '/dashboard/certificates',
-            'Support' => '/dashboard/support',
-            'Announcements' => '/dashboard/announcements',
+            'user_employee' => [
+                'Dashboard' => '/dashboard',
+                'Kelas Saya' => '/dashboard/classes',
+                'Sertifikat' => '/dashboard/certificates',
+                'Support Ticket' => '/dashboard/support',
+                'Profil' => '/dashboard/profile',
+            ],
+            'instructor' => [
+                'Dashboard' => '/instructor',
+                'Manajemen Kelas' => '/instructor/classes',
+                'Pengumuman' => '/instructor/announcements',
+                'Pesan' => '/instructor/messages',
+            ],
+            'admin' => [
+                'Dashboard' => '/admin',
+                'Kelola User' => '/admin/users',
+                'Manajemen Kelas' => '/admin/courses',
+                'Pengumuman' => '/admin/announcements',
+                'Support Ticket' => '/admin/support',
+                'Eskalasi' => '/admin/escalations',
+            ],
+            'super_admin' => [
+                'Dashboard' => '/superadmin',
+                'Kelola User' => '/superadmin/users',
+                'Role & Permission' => '/superadmin/roles',
+                'Pengumuman' => '/superadmin/announcements',
+                'Moodle Sync' => '/superadmin/moodle-sync',
+                'CMS Landing Page' => '/superadmin/home',
+                'Pimpinan' => '/superadmin/leaders',
+                'Partner' => '/superadmin/partners',
+                'Eskalasi Tiket' => '/superadmin/escalations',
+                'Activity Log' => '/superadmin/activity-log',
+            ],
         ];
     }
 
@@ -448,25 +652,27 @@ class AIAssistantController extends Controller
      */
     private function getQuickActions(User $user): array
     {
-        $actions = [
-            [
-                'label' => 'Buat Tiket Support',
-                'path' => '/dashboard/support/create',
-                'icon' => '🎫',
-            ],
-            [
-                'label' => 'Lihat Pengumuman',
-                'path' => '/dashboard/announcements',
-                'icon' => '📢',
-            ],
-        ];
+        $actions = [];
 
-        if ($user->hasRole(['admin', 'Admin'])) {
-            $actions[] = [
-                'label' => 'Tambah User Baru',
-                'path' => '/admin/users/create',
-                'icon' => '👤',
-            ];
+        if ($user->hasRole(['employee']) || !$user->hasRole(['admin', 'super-admin', 'instructor'])) {
+            $actions[] = ['label' => 'Buat Tiket Support', 'path' => '/dashboard/support'];
+            $actions[] = ['label' => 'Lihat Kelas Saya', 'path' => '/dashboard/classes'];
+            $actions[] = ['label' => 'Lihat Sertifikat', 'path' => '/dashboard/certificates'];
+        }
+
+        if ($user->hasRole(['instructor'])) {
+            $actions[] = ['label' => 'Lihat Kelas yang Diajar', 'path' => '/instructor/classes'];
+            $actions[] = ['label' => 'Buat Pengumuman', 'path' => '/instructor/announcements'];
+        }
+
+        if ($user->hasRole(['admin'])) {
+            $actions[] = ['label' => 'Kelola Kelas', 'path' => '/admin/courses'];
+            $actions[] = ['label' => 'Kelola Support Ticket', 'path' => '/admin/support'];
+        }
+
+        if ($user->hasRole(['super-admin'])) {
+            $actions[] = ['label' => 'Kelola User', 'path' => '/superadmin/users'];
+            $actions[] = ['label' => 'Sync Moodle', 'path' => '/superadmin/moodle-sync'];
         }
 
         return $actions;
@@ -738,9 +944,11 @@ class AIAssistantController extends Controller
                     // Extract content based on module type
                     switch ($module['modname']) {
                         case 'resource': // Files (PDF, DOC, etc)
+                            $moduleData['type_label'] = 'File/Materi';
                             if (isset($module['contents'][0]['fileurl'])) {
                                 $fileUrl = $module['contents'][0]['fileurl'] . "&token={$token}";
                                 $fileName = $module['contents'][0]['filename'] ?? '';
+                                $moduleData['file_name'] = $fileName;
 
                                 // Try to extract text from PDF
                                 if (str_ends_with(strtolower($fileName), '.pdf')) {
@@ -754,12 +962,60 @@ class AIAssistantController extends Controller
                             break;
 
                         case 'page': // HTML pages
+                            $moduleData['type_label'] = 'Halaman';
                             $moduleData['content'] = strip_tags($module['contents'][0]['content'] ?? '');
                             $content['resources'][] = $moduleData;
                             break;
 
                         case 'url': // External links
+                            $moduleData['type_label'] = 'Link';
                             $moduleData['url'] = $module['contents'][0]['fileurl'] ?? '';
+                            $content['resources'][] = $moduleData;
+                            break;
+
+                        case 'label': // Inline HTML content
+                            $moduleData['type_label'] = 'Label';
+                            $moduleData['content'] = strip_tags($module['description'] ?? '');
+                            $content['resources'][] = $moduleData;
+                            break;
+
+                        case 'folder': // Folder with files
+                            $moduleData['type_label'] = 'Folder';
+                            $fileNames = [];
+                            $folderTexts = [];
+                            foreach ($module['contents'] ?? [] as $file) {
+                                $fname = $file['filename'] ?? 'unknown';
+                                $fileNames[] = $fname;
+                                // Extract PDFs inside folder
+                                if (str_ends_with(strtolower($fname), '.pdf') && isset($file['fileurl'])) {
+                                    $pdfText = $this->extractPDFText($file['fileurl'] . "&token={$token}");
+                                    if ($pdfText) {
+                                        $folderTexts[] = "--- {$fname} ---\n" . $pdfText;
+                                    }
+                                }
+                            }
+                            $moduleData['files'] = $fileNames;
+                            if (!empty($folderTexts)) {
+                                $moduleData['content'] = implode("\n\n", $folderTexts);
+                            }
+                            $content['resources'][] = $moduleData;
+                            break;
+
+                        case 'book': // Book chapters
+                            $moduleData['type_label'] = 'Buku';
+                            $bookContent = $this->getBookContent($module['instance'] ?? null, $moodleUrl, $token);
+                            if ($bookContent) {
+                                $moduleData['content'] = $bookContent;
+                            }
+                            $content['resources'][] = $moduleData;
+                            break;
+
+                        case 'lesson': // Lesson pages
+                            $moduleData['type_label'] = 'Pelajaran';
+                            $lessonContent = $this->getLessonContent($module['instance'] ?? null, $moodleUrl, $token);
+                            if ($lessonContent) {
+                                $moduleData['content'] = $lessonContent;
+                            }
                             $content['resources'][] = $moduleData;
                             break;
 
@@ -768,13 +1024,58 @@ class AIAssistantController extends Controller
                             $content['activities'][] = $moduleData;
                             break;
 
-                        case 'quiz': // Quizzes
-                            $moduleData['type_label'] = 'Kuis';
+                        case 'assign': // Assignments - AI BISA baca deskripsi tugas
+                            $moduleData['type_label'] = 'Tugas';
+                            $assignContent = $this->getAssignmentContent($course->moodle_course_id, $module['instance'] ?? null, $moodleUrl, $token);
+                            if ($assignContent) {
+                                $moduleData['content'] = $assignContent;
+                            }
                             $content['activities'][] = $moduleData;
                             break;
 
-                        case 'assign': // Assignments
-                            $moduleData['type_label'] = 'Tugas';
+                        case 'quiz': // Quiz/Exam - AI TIDAK BOLEH baca soal
+                            $moduleData['type_label'] = 'Kuis/Ujian';
+                            $moduleData['note'] = 'Konten kuis/ujian tidak dapat dibaca AI untuk menjaga integritas ujian';
+                            $content['activities'][] = $moduleData;
+                            break;
+
+                        case 'glossary':
+                            $moduleData['type_label'] = 'Glosarium';
+                            $content['activities'][] = $moduleData;
+                            break;
+
+                        case 'wiki':
+                            $moduleData['type_label'] = 'Wiki';
+                            $content['activities'][] = $moduleData;
+                            break;
+
+                        case 'workshop':
+                            $moduleData['type_label'] = 'Workshop';
+                            $content['activities'][] = $moduleData;
+                            break;
+
+                        case 'feedback':
+                            $moduleData['type_label'] = 'Feedback';
+                            $content['activities'][] = $moduleData;
+                            break;
+
+                        case 'choice':
+                            $moduleData['type_label'] = 'Pilihan';
+                            $content['activities'][] = $moduleData;
+                            break;
+
+                        case 'scorm':
+                            $moduleData['type_label'] = 'SCORM';
+                            $content['activities'][] = $moduleData;
+                            break;
+
+                        case 'h5pactivity':
+                            $moduleData['type_label'] = 'H5P Interaktif';
+                            $content['activities'][] = $moduleData;
+                            break;
+
+                        default: // Tipe lainnya
+                            $moduleData['type_label'] = ucfirst($module['modname'] ?? 'Lainnya');
                             $content['activities'][] = $moduleData;
                             break;
                     }
@@ -796,6 +1097,129 @@ class AIAssistantController extends Controller
                 'error' => 'Failed to fetch course content',
             ];
         }
+    }
+
+    /**
+     * Fetch assignment content (deskripsi tugas) dari Moodle API
+     */
+    private function getAssignmentContent(int $moodleCourseId, ?int $instanceId, string $moodleUrl, string $token): ?string
+    {
+        if (!$instanceId) return null;
+
+        try {
+            $response = Http::withoutVerifying()->get("{$moodleUrl}/webservice/rest/server.php", [
+                'wstoken' => $token,
+                'wsfunction' => 'mod_assign_get_assignments',
+                'courseids[0]' => $moodleCourseId,
+                'moodlewsrestformat' => 'json',
+            ]);
+
+            if (!$response->successful()) return null;
+
+            $data = $response->json();
+            if (isset($data['exception'])) return null;
+
+            foreach ($data['courses'] ?? [] as $course) {
+                foreach ($course['assignments'] ?? [] as $assign) {
+                    if ($assign['id'] == $instanceId) {
+                        $intro = strip_tags($assign['intro'] ?? '');
+                        // Juga ambil attachment files jika ada
+                        $attachments = [];
+                        foreach ($assign['introattachments'] ?? [] as $att) {
+                            $attachments[] = $att['filename'] ?? '';
+                            // Extract PDF attachments
+                            if (str_ends_with(strtolower($att['filename'] ?? ''), '.pdf') && isset($att['fileurl'])) {
+                                $pdfText = $this->extractPDFText($att['fileurl'] . "?token={$token}");
+                                if ($pdfText) {
+                                    $intro .= "\n\n--- Lampiran: {$att['filename']} ---\n" . $pdfText;
+                                }
+                            }
+                        }
+                        return $intro ?: null;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('Failed to fetch assignment content: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Fetch book chapters content dari Moodle API
+     */
+    private function getBookContent(?int $instanceId, string $moodleUrl, string $token): ?string
+    {
+        if (!$instanceId) return null;
+
+        try {
+            $response = Http::withoutVerifying()->get("{$moodleUrl}/webservice/rest/server.php", [
+                'wstoken' => $token,
+                'wsfunction' => 'mod_book_get_books_by_courses',
+                'courseids[0]' => 0, // Will use bookid below
+                'moodlewsrestformat' => 'json',
+            ]);
+
+            // Alternative: get book content directly via book view
+            // Use mod_book_view_book to get chapters, but that requires user context
+            // Instead, get course contents which already includes book file data
+            // Books typically have chapter content as sub-files
+
+            // Fallback: try to get book intro at least
+            if ($response->successful()) {
+                $data = $response->json();
+                if (!isset($data['exception'])) {
+                    foreach ($data['books'] ?? [] as $book) {
+                        if ($book['id'] == $instanceId) {
+                            return strip_tags($book['intro'] ?? '');
+                        }
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('Failed to fetch book content: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Fetch lesson pages content dari Moodle API
+     */
+    private function getLessonContent(?int $instanceId, string $moodleUrl, string $token): ?string
+    {
+        if (!$instanceId) return null;
+
+        try {
+            $response = Http::withoutVerifying()->get("{$moodleUrl}/webservice/rest/server.php", [
+                'wstoken' => $token,
+                'wsfunction' => 'mod_lesson_get_pages',
+                'lessonid' => $instanceId,
+                'moodlewsrestformat' => 'json',
+            ]);
+
+            if (!$response->successful()) return null;
+
+            $data = $response->json();
+            if (isset($data['exception'])) return null;
+
+            $pages = [];
+            foreach ($data['pages'] ?? [] as $page) {
+                $pageContent = strip_tags($page['page']['contents'] ?? '');
+                if ($pageContent) {
+                    $title = $page['page']['title'] ?? '';
+                    $pages[] = ($title ? "## {$title}\n" : '') . $pageContent;
+                }
+            }
+
+            return !empty($pages) ? implode("\n\n", $pages) : null;
+
+        } catch (\Exception $e) {
+            Log::warning('Failed to fetch lesson content: ' . $e->getMessage());
+        }
+
+        return null;
     }
 
     /**

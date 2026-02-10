@@ -304,30 +304,11 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // =====================
-    // AI CHAT & FAQ ROUTES
+    // AI CHAT ROUTES
     // =====================
     Route::get('/chat/sessions', [\App\Http\Controllers\API\ChatController::class, 'getSessions']);
     Route::put('/chat/sessions/{id}', [\App\Http\Controllers\API\ChatController::class, 'renameSession']);
     Route::delete('/chat/sessions/{id}', [\App\Http\Controllers\API\ChatController::class, 'deleteSession']);
     Route::get('/chat/history', [\App\Http\Controllers\API\ChatController::class, 'history']);
     Route::post('/chat', [\App\Http\Controllers\API\ChatController::class, 'chat']);
-    Route::post('/chat/faq-feedback', [\App\Http\Controllers\API\ChatController::class, 'faqFeedback']);
-
-    // =====================
-    // FAQ MANAGEMENT (Admin/Super Admin)
-    // =====================
-    Route::prefix('admin/ai-faqs')->middleware('role:admin|super-admin')->group(function () {
-        Route::get('/', [\App\Http\Controllers\API\AiFaqController::class, 'index']);
-        Route::get('/statistics', [\App\Http\Controllers\API\AiFaqController::class, 'statistics']);
-        Route::post('/', [\App\Http\Controllers\API\AiFaqController::class, 'store']);
-        Route::get('/{id}', [\App\Http\Controllers\API\AiFaqController::class, 'show']);
-        Route::put('/{id}', [\App\Http\Controllers\API\AiFaqController::class, 'update']);
-        Route::delete('/{id}', [\App\Http\Controllers\API\AiFaqController::class, 'destroy']);
-        Route::post('/bulk-toggle', [\App\Http\Controllers\API\AiFaqController::class, 'bulkToggle']);
-
-        // FAQ Suggestions (Auto-Learn)
-        Route::get('/suggestions/list', [\App\Http\Controllers\API\AiFaqController::class, 'suggestions']);
-        Route::post('/suggestions/{id}/approve', [\App\Http\Controllers\API\AiFaqController::class, 'approveSuggestion']);
-        Route::post('/suggestions/{id}/reject', [\App\Http\Controllers\API\AiFaqController::class, 'rejectSuggestion']);
-    });
 });

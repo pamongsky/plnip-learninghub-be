@@ -111,7 +111,7 @@ class EscalationTicketController extends Controller
             'subject' => 'required|string|max:255',
             'description' => 'required|string',
             'priority' => 'required|in:low,medium,high,urgent',
-            'category' => 'required|in:technical,access,moodle,feature_request,other',
+            'category' => 'required|in:technical,learning,certificate,other',
         ]);
 
         $user = Auth::user();

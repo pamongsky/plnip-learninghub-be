@@ -144,7 +144,6 @@ class SupportTicket extends Model
             'technical' => 'Masalah Teknis',
             'learning' => 'Masalah Pembelajaran',
             'certificate' => 'Masalah Sertifikat',
-            'payment' => 'Masalah Pembayaran',
             'other' => 'Lainnya',
             default => $this->category,
         };

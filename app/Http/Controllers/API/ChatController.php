@@ -10,9 +10,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use App\Models\ChatSession;
 use App\Models\ChatMessage;
-use App\Models\AiFaq;
-use App\Models\AiFaqAnalytic;
-use App\Models\AiFaqSuggestion;
 
 class ChatController extends Controller
 {
@@ -112,66 +109,6 @@ class ChatController extends Controller
                 } else {
                     // For PDF/docs, just inform the AI (no inline_data)
                     $userMessage .= "\n\n[User melampirkan file: " . $file->getClientOriginalName() . " (" . $mimeType . "). Catatan: Saya tidak bisa membaca konten file ini, tapi file sudah tersimpan.]";
-                }
-            }
-
-            // 3.5. Check FAQ Cache (ONLY for text-only queries, skip if has image attachment)
-            if (!$hasImageForGemini && !empty($userMessage)) {
-                $startFaqTime = microtime(true);
-                $cacheKey = 'faq_response:' . md5(strtolower(trim($userMessage)));
-
-                // Check cache first
-                $faqMatch = Cache::remember($cacheKey, 3600, function() use ($userMessage) {
-                    return AiFaq::searchByKeyword($userMessage);
-                });
-
-                if ($faqMatch) {
-                    // FAQ Hit! Return FAQ response
-                    $faqResponseTime = round((microtime(true) - $startFaqTime) * 1000, 2);
-
-                    // Log analytics
-                    $analytic = AiFaqAnalytic::create([
-                        'faq_id' => $faqMatch->id,
-                        'user_id' => $userId,
-                        'user_query' => $userMessage,
-                        'match_score' => $faqMatch->match_score ?? 0.8,
-                        'response_source' => 'cache',
-                        'response_time_ms' => $faqResponseTime,
-                    ]);
-
-                    // Update FAQ usage stats
-                    $faqMatch->increment('usage_count');
-                    $faqMatch->update(['last_used_at' => now()]);
-
-                    // Create assistant message
-                    $assistantChatMsg = ChatMessage::create([
-                        'chat_session_id' => $session->id,
-                        'role' => 'model',
-                        'content' => $faqMatch->answer_short ?: $faqMatch->answer
-                    ]);
-
-                    Log::info('FAQ Cache Hit', [
-                        'faq_id' => $faqMatch->id,
-                        'query' => $userMessage,
-                        'response_time_ms' => $faqResponseTime,
-                        'analytic_id' => $analytic->id,
-                    ]);
-
-                    return response()->json([
-                        'message' => [
-                            'id' => $assistantChatMsg->id,
-                            'chat_session_id' => $session->id,
-                            'role' => 'model',
-                            'content' => $assistantChatMsg->content,
-                            'created_at' => $assistantChatMsg->created_at,
-                            'updated_at' => $assistantChatMsg->updated_at,
-                        ],
-                        'session_id' => $session->id,
-                        'source' => 'faq',
-                        'faq_id' => $faqMatch->id,
-                        'analytic_id' => $analytic->id, // For user feedback
-                        'response_time_ms' => $faqResponseTime,
-                    ]);
                 }
             }
 
@@ -296,31 +233,6 @@ class ChatController extends Controller
                 'content' => $aiReply
             ]);
 
-            // 6.5. Auto-Learn: Save as FAQ suggestion for future (only for text queries)
-            if (!$hasImageForGemini && !empty($userMessage) && strlen($userMessage) > 10) {
-                // Check if similar suggestion exists
-                $existingSuggestion = AiFaqSuggestion::where('question', 'LIKE', '%' . substr($userMessage, 0, 50) . '%')
-                    ->where('status', 'pending')
-                    ->first();
-
-                if ($existingSuggestion) {
-                    // Increment occurrence count
-                    $existingSuggestion->increment('occurrence_count');
-                } else {
-                    // Create new suggestion
-                    AiFaqSuggestion::create([
-                        'question' => $userMessage,
-                        'answer' => $aiReply,
-                        'occurrence_count' => 1,
-                        'status' => 'pending',
-                    ]);
-
-                    Log::info('FAQ Auto-Learn Suggestion Created', [
-                        'question' => substr($userMessage, 0, 100),
-                    ]);
-                }
-            }
-
             // Update Session Title
             if ($session->messages()->count() <= 2) {
                  $session->update(['title' => substr($userMessage, 0, 50)]);
@@ -337,46 +249,6 @@ class ChatController extends Controller
             Log::error('Chat Exception: ' . $e->getMessage());
             return response()->json(['message' => 'Terjadi kesalahan sistem.' . $e->getMessage()], 500);
         }
-    }
-
-    /**
-     * Provide feedback on FAQ response
-     */
-    public function faqFeedback(Request $request)
-    {
-        $request->validate([
-            'analytic_id' => 'required|integer|exists:ai_faq_analytics,id',
-            'was_helpful' => 'required|boolean',
-        ]);
-
-        $analytic = AiFaqAnalytic::findOrFail($request->analytic_id);
-        $analytic->update(['was_helpful' => $request->was_helpful]);
-
-        // Update FAQ success/failure count
-        $faq = $analytic->faq;
-        if ($request->was_helpful) {
-            $faq->increment('success_count');
-        } else {
-            $faq->increment('failure_count');
-        }
-
-        // If failure rate too high, auto-deactivate
-        if ($faq->failure_count > 5 && $faq->success_rate < 30) {
-            $faq->update(['is_active' => false]);
-            Log::warning('FAQ Auto-Deactivated Due to Low Success Rate', [
-                'faq_id' => $faq->id,
-                'success_rate' => $faq->success_rate,
-            ]);
-        }
-
-        return response()->json([
-            'message' => 'Terima kasih atas feedback Anda!',
-            'faq' => [
-                'id' => $faq->id,
-                'success_rate' => $faq->success_rate,
-                'is_active' => $faq->is_active,
-            ]
-        ]);
     }
 
     /**
