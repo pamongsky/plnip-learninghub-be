@@ -134,7 +134,7 @@ class CourseController extends Controller
     {
         $course = Course::with([
             'instructor:id,name,avatar',
-            'enrollments.user:id,name,email,avatar,department',
+            'enrollments.user:id,name,email,avatar,department,employee_id',
             'students',
         ])->findOrFail($id);
 
@@ -358,12 +358,12 @@ class CourseController extends Controller
                     ]);
                 }
 
-                // 5. Insert into mdl_role_assignments (The "Student" label)
-                // Role ID mapping:
+                // 5. Insert into mdl_role_assignments
+                // Moodle Role ID mapping:
                 // 1 = Manager (Super Admin)
                 // 2 = Course Creator (Admin)
-                // 3 = Non-Editing Teacher
-                // 4 = Editing Teacher
+                // 3 = Editing Teacher (Instruktur Penuh)
+                // 4 = Non-Editing Teacher (Asisten)
                 // 5 = Student
 
                 // Auto-map Portal role to Moodle role if not explicitly provided
@@ -371,12 +371,12 @@ class CourseController extends Controller
 
                 if (!$roleId) {
                     // Check user's Portal role and auto-map
-                    if ($user->hasRole('super_admin')) {
+                    if ($user->hasRole('super-admin')) {
                         $roleId = 1; // Manager in Moodle
                     } elseif ($user->hasRole('admin')) {
                         $roleId = 2; // Course Creator in Moodle
                     } elseif ($user->hasRole('instructor')) {
-                        $roleId = 4; // Editing Teacher in Moodle
+                        $roleId = 3; // Editing Teacher in Moodle
                     } else {
                         $roleId = 5; // Student (default)
                     }
@@ -420,6 +420,12 @@ class CourseController extends Controller
                 ]);
             }
 
+            // Auto-assign instructor_id if enrolling as teacher
+            if (in_array($roleId, [3, 4]) && !$course->instructor_id) {
+                $course->update(['instructor_id' => $user->id]);
+                Log::info("Auto-assigned instructor_id {$user->id} to course {$course->id}");
+            }
+
             DB::commit();
 
             return response()->json([
@@ -456,6 +462,307 @@ class CourseController extends Controller
         $enrollment->update(['status' => 'suspended']);
 
         return response()->json(['message' => 'User berhasil disuspend dari kelas']);
+    }
+
+    /**
+     * Update Moodle role for an enrolled user
+     */
+    public function updateEnrollmentRole(Request $request, $id, $userId)
+    {
+        $request->validate([
+            'role_id' => 'required|integer|in:1,2,3,4,5',
+        ]);
+
+        $currentUser = $request->user();
+        if (!$currentUser || !$currentUser->hasRole(['super-admin', 'admin'])) {
+            return response()->json([
+                'message' => 'Hanya admin yang bisa mengubah role'
+            ], 403);
+        }
+
+        try {
+            $course = Course::findOrFail($id);
+            $user = User::findOrFail($userId);
+            $newRoleId = $request->role_id;
+
+            $enrollment = CourseEnrollment::where('course_id', $id)
+                ->where('user_id', $userId)
+                ->firstOrFail();
+
+            $oldRoleId = $enrollment->moodle_role_id;
+
+            // Update Moodle role_assignments if course has Moodle integration
+            if ($course->moodle_course_id && $user->moodle_user_id) {
+                $moodleConn = DB::connection('moodle');
+
+                $context = $moodleConn->table('context')
+                    ->where('contextlevel', 50)
+                    ->where('instanceid', $course->moodle_course_id)
+                    ->first();
+
+                if ($context) {
+                    // Remove old role assignment
+                    $moodleConn->table('role_assignments')
+                        ->where('contextid', $context->id)
+                        ->where('userid', $user->moodle_user_id)
+                        ->where('roleid', $oldRoleId)
+                        ->delete();
+
+                    // Insert new role assignment
+                    $moodleConn->table('role_assignments')->insert([
+                        'roleid' => $newRoleId,
+                        'contextid' => $context->id,
+                        'userid' => $user->moodle_user_id,
+                        'timemodified' => now()->timestamp,
+                        'modifierid' => 2, // admin
+                        'component' => '',
+                        'itemid' => 0,
+                        'sortorder' => 0,
+                    ]);
+                }
+            }
+
+            // Update local enrollment
+            $enrollment->update(['moodle_role_id' => $newRoleId]);
+
+            // Update instructor_id if changing to/from teacher role
+            if (in_array($newRoleId, [3, 4]) && !$course->instructor_id) {
+                $course->update(['instructor_id' => $user->id]);
+            }
+
+            $roleNames = [1 => 'Manager', 2 => 'Course Creator', 3 => 'Editing Teacher', 4 => 'Non-Editing Teacher', 5 => 'Student'];
+
+            return response()->json([
+                'message' => "Role berhasil diubah ke {$roleNames[$newRoleId]}",
+                'data' => $enrollment->fresh(),
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Update role error: " . $e->getMessage());
+            return response()->json([
+                'message' => 'Gagal mengubah role: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get detailed progress for a specific user in a course
+     */
+    public function getUserProgress($courseId, $userId)
+    {
+        $course = Course::findOrFail($courseId);
+        $user = User::findOrFail($userId);
+
+        if (!$course->moodle_course_id) {
+            return response()->json([
+                'message' => 'Course tidak terhubung ke Moodle'
+            ], 404);
+        }
+
+        try {
+            $moodleConn = DB::connection('moodle');
+
+            // Find Moodle user by email
+            $moodleUser = $moodleConn->table('user')
+                ->where('email', $user->email)
+                ->where('deleted', 0)
+                ->first();
+
+            if (!$moodleUser) {
+                return response()->json([
+                    'message' => 'User tidak ditemukan di Moodle'
+                ], 404);
+            }
+
+            // 1. Get all visible course modules with their types
+            $modules = $moodleConn->table('course_modules as cm')
+                ->join('modules as m', 'cm.module', '=', 'm.id')
+                ->where('cm.course', $course->moodle_course_id)
+                ->where('cm.visible', 1)
+                ->where('cm.deletioninprogress', 0)
+                ->select(
+                    'cm.id as cmid',
+                    'cm.instance',
+                    'cm.section',
+                    'cm.completion',
+                    'm.name as module_type'
+                )
+                ->orderBy('cm.section')
+                ->orderBy('cm.id')
+                ->get();
+
+            // 2. Get activity names from each module-specific table
+            $moduleTypes = $modules->pluck('module_type')->unique();
+            $namesByType = [];
+
+            foreach ($moduleTypes as $type) {
+                $instanceIds = $modules->where('module_type', $type)->pluck('instance')->toArray();
+                if (empty($instanceIds)) continue;
+
+                try {
+                    $names = $moodleConn->table($type)
+                        ->whereIn('id', $instanceIds)
+                        ->select('id', 'name')
+                        ->get()
+                        ->keyBy('id');
+                    $namesByType[$type] = $names;
+                } catch (\Exception $e) {
+                    // Some module types might not have a 'name' column (e.g., label)
+                    Log::warning("Could not fetch names for module type '{$type}': " . $e->getMessage());
+                    $namesByType[$type] = collect();
+                }
+            }
+
+            // Assign names to modules
+            foreach ($modules as $mod) {
+                $names = $namesByType[$mod->module_type] ?? collect();
+                $mod->activity_name = isset($names[$mod->instance]) ? $names[$mod->instance]->name : 'Aktivitas';
+            }
+
+            // 3. Get completion status for this user
+            $completions = $moodleConn->table('course_modules_completion')
+                ->where('userid', $moodleUser->id)
+                ->whereIn('coursemoduleid', $modules->pluck('cmid')->toArray())
+                ->get()
+                ->keyBy('coursemoduleid');
+
+            // 4. Get grade items for this course (mod type only)
+            $gradeItems = $moodleConn->table('grade_items')
+                ->where('courseid', $course->moodle_course_id)
+                ->where('itemtype', 'mod')
+                ->get();
+
+            // 5. Get grades for this user
+            $grades = collect();
+            if ($gradeItems->isNotEmpty()) {
+                $grades = $moodleConn->table('grade_grades')
+                    ->where('userid', $moodleUser->id)
+                    ->whereIn('itemid', $gradeItems->pluck('id')->toArray())
+                    ->get()
+                    ->keyBy('itemid');
+            }
+
+            // 6. Build activities list
+            $activities = [];
+            foreach ($modules as $mod) {
+                $completion = $completions->get($mod->cmid);
+
+                // Find matching grade item
+                $gradeItem = $gradeItems
+                    ->where('itemmodule', $mod->module_type)
+                    ->where('iteminstance', $mod->instance)
+                    ->first();
+
+                $grade = $gradeItem ? $grades->get($gradeItem->id) : null;
+
+                $gradePercent = null;
+                $gradeRaw = null;
+                $gradeMax = null;
+
+                if ($grade && $grade->finalgrade !== null && $gradeItem) {
+                    $gradeMax = $gradeItem->grademax ?: 100;
+                    $gradeRaw = round($grade->finalgrade, 1);
+                    $gradePercent = round(($grade->finalgrade / $gradeMax) * 100, 1);
+                }
+
+                $activities[] = [
+                    'cmid' => $mod->cmid,
+                    'name' => $mod->activity_name,
+                    'type' => $mod->module_type,
+                    'has_completion' => $mod->completion > 0,
+                    'completion_status' => $completion ? (int)$completion->completionstate : 0,
+                    // 0=not completed, 1=complete, 2=complete-pass, 3=complete-fail
+                    'grade' => $gradePercent,
+                    'grade_raw' => $gradeRaw,
+                    'grade_max' => $gradeMax ? round($gradeMax, 1) : null,
+                ];
+            }
+
+            // 7. Course total grade
+            $courseTotalItem = $moodleConn->table('grade_items')
+                ->where('courseid', $course->moodle_course_id)
+                ->where('itemtype', 'course')
+                ->first();
+
+            $courseGrade = null;
+            if ($courseTotalItem) {
+                $ctGrade = $moodleConn->table('grade_grades')
+                    ->where('userid', $moodleUser->id)
+                    ->where('itemid', $courseTotalItem->id)
+                    ->first();
+
+                if ($ctGrade && $ctGrade->finalgrade !== null) {
+                    $courseGrade = round(
+                        ($ctGrade->finalgrade / ($courseTotalItem->grademax ?: 100)) * 100,
+                        1
+                    );
+                }
+            }
+
+            // 8. Last access from log
+            $lastAccess = $moodleConn->table('logstore_standard_log')
+                ->where('userid', $moodleUser->id)
+                ->where('courseid', $course->moodle_course_id)
+                ->orderBy('timecreated', 'desc')
+                ->first();
+
+            // 9. Calculate overall progress (hybrid: completion → grade fallback)
+            $totalWithCompletion = $modules->where('completion', '>', 0)->count();
+            $completedCount = $completions->filter(fn($c) => $c->completionstate > 0)->count();
+
+            $courseCompletion = $moodleConn->table('course_completions')
+                ->where('userid', $moodleUser->id)
+                ->where('course', $course->moodle_course_id)
+                ->first();
+
+            $overallProgress = 0;
+            $progressMode = 'none';
+
+            if ($courseCompletion && $courseCompletion->timecompleted) {
+                $overallProgress = 100;
+                $progressMode = 'course_complete';
+            } elseif ($totalWithCompletion > 0) {
+                $overallProgress = round(($completedCount / $totalWithCompletion) * 100);
+                $progressMode = 'completion';
+            } else {
+                // Fallback: no completion configured → use grades
+                $totalGradeable = $gradeItems->count();
+                $gradedCount = $grades->filter(fn($g) => $g->finalgrade !== null)->count();
+                if ($totalGradeable > 0) {
+                    $overallProgress = round(($gradedCount / $totalGradeable) * 100);
+                    $progressMode = 'grades';
+                    $totalWithCompletion = $totalGradeable;
+                    $completedCount = $gradedCount;
+                }
+            }
+
+            return response()->json([
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'employee_id' => $user->employee_id,
+                ],
+                'course' => [
+                    'id' => $course->id,
+                    'title' => $course->title,
+                ],
+                'progress' => $overallProgress,
+                'progress_mode' => $progressMode,
+                'total_activities' => $modules->count(),
+                'completed_activities' => $completedCount,
+                'total_with_completion' => $totalWithCompletion,
+                'activities' => $activities,
+                'course_grade' => $courseGrade,
+                'last_access' => $lastAccess ? date('Y-m-d H:i:s', $lastAccess->timecreated) : null,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error("Progress tracking error: " . $e->getMessage());
+            return response()->json([
+                'message' => 'Gagal mengambil data progress: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

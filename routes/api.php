@@ -265,6 +265,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [\App\Http\Controllers\Api\CourseController::class, 'update']);
         Route::post('/{id}/enroll', [\App\Http\Controllers\Api\CourseController::class, 'enrollUser']);
         Route::delete('/{id}/enroll/{userId}', [\App\Http\Controllers\Api\CourseController::class, 'unenrollUser']);
+        Route::patch('/{id}/enroll/{userId}/role', [\App\Http\Controllers\Api\CourseController::class, 'updateEnrollmentRole']);
+        Route::get('/{id}/progress/{userId}', [\App\Http\Controllers\Api\CourseController::class, 'getUserProgress']);
         Route::post('/{id}/upload-certificate/{userId}', [\App\Http\Controllers\API\CertificateController::class, 'uploadForUser'])->middleware('role:admin|super-admin');
         Route::post('/{id}/upload-certificates-zip', [\App\Http\Controllers\API\CertificateController::class, 'uploadBulkZip'])->middleware('role:admin|super-admin');
     });

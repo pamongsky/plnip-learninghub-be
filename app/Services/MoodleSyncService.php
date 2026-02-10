@@ -216,12 +216,20 @@ class MoodleSyncService
             $errors = 0;
 
             // Get all active enrollments dari Moodle
-            // Join: user_enrolments -> enrol -> course -> user
+            // Join: user_enrolments -> enrol -> course -> user -> role_assignments
             $moodleEnrollments = DB::connection('moodle')
                 ->table('user_enrolments as ue')
                 ->join('enrol as e', 'ue.enrolid', '=', 'e.id')
                 ->join('course as c', 'e.courseid', '=', 'c.id')
                 ->join('user as u', 'ue.userid', '=', 'u.id')
+                ->leftJoin('context as ctx', function($join) {
+                    $join->on('ctx.instanceid', '=', 'c.id')
+                         ->where('ctx.contextlevel', '=', 50); // Course context
+                })
+                ->leftJoin('role_assignments as ra', function($join) {
+                    $join->on('ra.userid', '=', 'u.id')
+                         ->on('ra.contextid', '=', 'ctx.id');
+                })
                 ->where('u.deleted', 0)
                 ->where('u.suspended', 0)
                 ->where('c.id', '!=', 1)
@@ -233,7 +241,8 @@ class MoodleSyncService
                     'c.fullname as course_name',
                     'ue.timecreated',
                     'ue.timemodified',
-                    'ue.status'
+                    'ue.status',
+                    'ra.roleid as moodle_role_id'
                 )
                 ->get();
 
@@ -263,6 +272,7 @@ class MoodleSyncService
                     $enrollmentData = [
                         'user_id' => $portalUser->id,
                         'course_id' => $portalCourse->id,
+                        'moodle_role_id' => $mEnroll->moodle_role_id ?? 5, // Default to student if role not found
                         'enrolled_at' => Carbon::createFromTimestamp($mEnroll->timecreated),
                         'status' => $mEnroll->status == 0 ? 'active' : 'suspended',
                     ];
@@ -273,6 +283,12 @@ class MoodleSyncService
                     } else {
                         CourseEnrollment::create($enrollmentData);
                         $added++;
+                    }
+
+                    // Auto-assign instructor_id if role is teacher (3 or 4) and course has no instructor
+                    if (in_array($mEnroll->moodle_role_id, [3, 4]) && !$portalCourse->instructor_id) {
+                        $portalCourse->update(['instructor_id' => $portalUser->id]);
+                        $this->log('info', "Auto-assigned instructor {$portalUser->name} to course {$portalCourse->title}");
                     }
 
                     $this->log('debug', "Synced enrollment: {$mEnroll->email} -> {$mEnroll->course_name}");
