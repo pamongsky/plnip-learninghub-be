@@ -211,17 +211,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // ESCALATION TICKET ROUTES (Admin <-> Super Admin)
     // =====================
     Route::prefix('escalations')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Api\EscalationTicketController::class, 'index']);
-        Route::get('/stats', [\App\Http\Controllers\Api\EscalationTicketController::class, 'stats']);
-        Route::post('/', [\App\Http\Controllers\Api\EscalationTicketController::class, 'store']);
-        Route::get('/check-support/{supportTicketId}', [\App\Http\Controllers\Api\EscalationTicketController::class, 'checkBySupportTicket']);
-        Route::get('/{escalationTicket}', [\App\Http\Controllers\Api\EscalationTicketController::class, 'show']);
-        Route::post('/{escalationTicket}/reply', [\App\Http\Controllers\Api\EscalationTicketController::class, 'reply']);
-        Route::patch('/{escalationTicket}/status', [\App\Http\Controllers\Api\EscalationTicketController::class, 'updateStatus']);
+        Route::get('/', [\App\Http\Controllers\API\EscalationTicketController::class, 'index']);
+        Route::get('/stats', [\App\Http\Controllers\API\EscalationTicketController::class, 'stats']);
+        Route::post('/', [\App\Http\Controllers\API\EscalationTicketController::class, 'store']);
+        Route::get('/check-support/{supportTicketId}', [\App\Http\Controllers\API\EscalationTicketController::class, 'checkBySupportTicket']);
+        Route::get('/{escalationTicket}', [\App\Http\Controllers\API\EscalationTicketController::class, 'show']);
+        Route::post('/{escalationTicket}/reply', [\App\Http\Controllers\API\EscalationTicketController::class, 'reply']);
+        Route::patch('/{escalationTicket}/status', [\App\Http\Controllers\API\EscalationTicketController::class, 'updateStatus']);
     });
 
     // Escalate support ticket to Super Admin (Change param to id for manual finding)
-    Route::post('/support/tickets/{id}/escalate', [\App\Http\Controllers\Api\EscalationTicketController::class, 'escalate']);
+    Route::post('/support/tickets/{id}/escalate', [\App\Http\Controllers\API\EscalationTicketController::class, 'escalate']);
 
     // =====================
     // LANDING PAGE CMS
@@ -255,18 +255,18 @@ Route::middleware('auth:sanctum')->group(function () {
     // COURSE MANAGEMENT ROUTES
     // =====================
     Route::prefix('courses')->group(function () {
-        Route::get('/', [\App\Http\Controllers\Api\CourseController::class, 'index']);
-        Route::post('/sync', [\App\Http\Controllers\Api\CourseController::class, 'sync']);
+        Route::get('/', [\App\Http\Controllers\API\CourseController::class, 'index']);
+        Route::post('/sync', [\App\Http\Controllers\API\CourseController::class, 'sync']);
         Route::get('/my', [\App\Http\Controllers\API\CourseController::class, 'myCourses']);
         // Tracking HARUS di atas /{id} agar tidak kena match sebagai ID
-        Route::get('/enrollments/tracking', [\App\Http\Controllers\Api\CourseController::class, 'getEnrollmentTracking']);
+        Route::get('/enrollments/tracking', [\App\Http\Controllers\API\CourseController::class, 'getEnrollmentTracking']);
         // Specific routes dulu baru dynamic {id}
-        Route::get('/{id}', [\App\Http\Controllers\Api\CourseController::class, 'show']);
-        Route::put('/{id}', [\App\Http\Controllers\Api\CourseController::class, 'update']);
-        Route::post('/{id}/enroll', [\App\Http\Controllers\Api\CourseController::class, 'enrollUser']);
-        Route::delete('/{id}/enroll/{userId}', [\App\Http\Controllers\Api\CourseController::class, 'unenrollUser']);
-        Route::patch('/{id}/enroll/{userId}/role', [\App\Http\Controllers\Api\CourseController::class, 'updateEnrollmentRole']);
-        Route::get('/{id}/progress/{userId}', [\App\Http\Controllers\Api\CourseController::class, 'getUserProgress']);
+        Route::get('/{id}', [\App\Http\Controllers\API\CourseController::class, 'show']);
+        Route::put('/{id}', [\App\Http\Controllers\API\CourseController::class, 'update']);
+        Route::post('/{id}/enroll', [\App\Http\Controllers\API\CourseController::class, 'enrollUser']);
+        Route::delete('/{id}/enroll/{userId}', [\App\Http\Controllers\API\CourseController::class, 'unenrollUser']);
+        Route::patch('/{id}/enroll/{userId}/role', [\App\Http\Controllers\API\CourseController::class, 'updateEnrollmentRole']);
+        Route::get('/{id}/progress/{userId}', [\App\Http\Controllers\API\CourseController::class, 'getUserProgress']);
         Route::post('/{id}/upload-certificate/{userId}', [\App\Http\Controllers\API\CertificateController::class, 'uploadForUser'])->middleware('role:admin|super-admin');
         Route::post('/{id}/upload-certificates-zip', [\App\Http\Controllers\API\CertificateController::class, 'uploadBulkZip'])->middleware('role:admin|super-admin');
     });
