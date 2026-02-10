@@ -1,15 +1,46 @@
 # Arsitektur Sistem PLN IP Learning Hub Portal
 
+## KONSEP DASAR SISTEM
+
+Sebelum masuk ke detail teknis, pahami dulu gambaran besar sistem ini:
+
+### Apa Itu PLN IP Learning Hub?
+
+Portal ini adalah sistem pembelajaran online untuk karyawan PLN Indonesia Power. Tujuannya:
+- Semua karyawan bisa akses materi pembelajaran dari mana saja
+- Admin bisa manage kelas dan peserta dengan mudah
+- Sertifikat digital otomatis setelah selesai kelas
+- Integrasi dengan sistem yang sudah ada (ERP dan Moodle)
+
+### Analogi Sederhana
+
+Bayangkan sistem ini seperti **sekolah online**:
+- **Portal** = gedung sekolah (tempat daftar, lihat jadwal, ambil sertifikat)
+- **Moodle** = ruang kelas (tempat belajar, baca materi, kerjakan tugas)
+- **ERP** = database karyawan (data siapa aja yang boleh sekolah di sini)
+- **AI Assistant** = guru privat (bantu jawab pertanyaan 24/7)
+
+### Kenapa Pakai Banyak Komponen?
+
+**Tidak Pakai 1 Sistem All-in-One Karena:**
+1. **Moodle** sudah ada dan banyak materi → tidak perlu bikin LMS dari nol
+2. **ERP** sudah punya data karyawan → tidak perlu input manual
+3. **Backend terpisah** → bisa di-upgrade tanpa ganggu frontend
+4. **Frontend terpisah** → bisa ganti design tanpa ganggu backend
+
+---
+
 ## 1. Gambaran Umum
 
-PLN IP Learning Hub Portal adalah sistem manajemen pembelajaran berbasis web yang mengintegrasikan beberapa komponen utama:
+PLN IP Learning Hub Portal terdiri dari beberapa komponen yang bekerja sama:
 
-- **Backend REST API** (Laravel 12)
-- **Frontend Web Application** (Next.js 14)
-- **LMS (Learning Management System)** - Moodle
-- **Database** - Oracle Database
-- **ERP System** - Sistem ERP PLN IP untuk data karyawan
-- **AI Assistant** - Google Gemini API
+**Komponen Utama:**
+- **Backend REST API** (Laravel 12) - Otak sistem yang atur semua logic
+- **Frontend Web Application** (Next.js 14) - Tampilan yang user lihat di browser
+- **LMS (Learning Management System)** - Moodle untuk materi pembelajaran
+- **Database** - Oracle Database untuk simpan data
+- **ERP System** - Sistem ERP PLN IP untuk data karyawan (sync otomatis)
+- **AI Assistant** - Google Gemini API untuk chatbot pembelajaran
 
 ### 1.1 Diagram Arsitektur High-Level
 
@@ -49,11 +80,31 @@ PLN IP Learning Hub Portal adalah sistem manajemen pembelajaran berbasis web yan
 
 ### 1.2 Prinsip Arsitektur
 
-1. **Separation of Concerns** - Backend (API) terpisah dari Frontend (UI)
-2. **RESTful API** - Semua komunikasi backend-frontend menggunakan REST API
-3. **Database Integration** - Portal sebagai master data, Moodle sebagai LMS
-4. **Data Synchronization** - ERP → Portal → Moodle (unidirectional sync)
-5. **Role-Based Access Control** - Spatie Permission untuk granular permissions
+Sistem ini didesain dengan prinsip-prinsip berikut (dan alasannya):
+
+**1. Separation of Concerns (Pemisahan Tanggung Jawab)**
+- Backend dan Frontend terpisah
+- **Kenapa?** Agar tim bisa kerja parallel (backend developer & frontend developer) tanpa bentrok
+
+**2. RESTful API (Komunikasi Standar)**
+- Semua komunikasi pakai REST API (JSON format)
+- **Kenapa?** Agar frontend bisa diganti (dari web ke mobile app) tanpa ubah backend
+
+**3. Database Integration (Integrasi Database)**
+- Portal punya database sendiri (master data)
+- Moodle punya database sendiri (untuk LMS)
+- Portal bisa akses database Moodle (read-only)
+- **Kenapa?** Portal tidak ganggu struktur Moodle yang sudah jalan, tapi bisa ambil data dari Moodle
+
+**4. Data Synchronization (Sinkronisasi Data)**
+- Data karyawan: ERP → Portal (one-way sync)
+- Data course: Moodle → Portal (one-way sync)
+- **Kenapa one-way?** Supaya ERP dan Moodle tetap jadi master data, Portal hanya baca
+
+**5. Role-Based Access Control (Kontrol Akses Berdasarkan Role)**
+- User punya role (super-admin, admin, instructor, user)
+- Setiap role punya permission berbeda
+- **Kenapa?** Agar super-admin bisa CRUD semua, tapi user biasa hanya bisa lihat kelas mereka sendiri
 
 ## 2. Komponen Backend (Laravel 12)
 
