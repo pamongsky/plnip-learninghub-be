@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SupportTicket;
 use App\Models\SupportReply;
 use App\Events\NewSupportReply;
+use App\Events\SupportTicketStatusUpdated;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -222,6 +223,9 @@ class SupportTicketController extends Controller
         }
 
         $ticket->update($updateData);
+
+        // Broadcast status update to all connected users
+        broadcast(new SupportTicketStatusUpdated($ticket))->toOthers();
 
         return response()->json([
             'success' => true,
