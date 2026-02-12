@@ -162,8 +162,8 @@ class MoodleAuthController extends Controller
 
         // Role mapping: Portal role → Moodle role
         $roleMap = [
-            'super-admin' => 1,  // Manager/Site Administrator
-            'admin' => 1,        // Manager
+            'super-admin' => 1,  // Manager (full system access)
+            'admin' => 2,        // Course Creator (manage users + create courses, NOT manager)
             'instructor' => 3,   // Editing Teacher
             'employee' => 5,     // Student
         ];
@@ -172,15 +172,28 @@ class MoodleAuthController extends Controller
         $portalRole = $portalUser->getRoleNames()->first();
         $moodleRoleId = $roleMap[$portalRole] ?? 5; // Default: Student
 
-        // Check if already assigned
-        $existing = DB::connection('moodle')
+        // Check if user already has ANY role assignment in system context
+        $existingAssignment = DB::connection('moodle')
             ->table('role_assignments')
-            ->where('roleid', $moodleRoleId)
             ->where('userid', $moodleUserId)
             ->where('contextid', $systemContext->id)
-            ->exists();
+            ->first();
 
-        if (!$existing) {
+        if ($existingAssignment) {
+            // Update existing role if different
+            if ($existingAssignment->roleid != $moodleRoleId) {
+                DB::connection('moodle')
+                    ->table('role_assignments')
+                    ->where('id', $existingAssignment->id)
+                    ->update([
+                        'roleid' => $moodleRoleId,
+                        'timemodified' => now()->timestamp,
+                    ]);
+
+                Log::info("Updated Moodle role from {$existingAssignment->roleid} to {$moodleRoleId} ({$portalRole}) for user {$moodleUserId}");
+            }
+        } else {
+            // Create new role assignment
             DB::connection('moodle')->table('role_assignments')->insert([
                 'roleid' => $moodleRoleId,
                 'contextid' => $systemContext->id,
