@@ -71,12 +71,14 @@ class RolePermissionSeeder extends Seeder
         // =====================
 
         // Super Admin - all permissions
+        /** @var Role $superAdminRole */
         $superAdminRole = Role::where('name', 'super-admin')->first();
         if ($superAdminRole) {
             $superAdminRole->syncPermissions(Permission::all());
         }
 
         // Admin - manage users, announcements, reports, tickets
+        /** @var Role $adminRole */
         $adminRole = Role::where('name', 'admin')->first();
         if ($adminRole) {
             $adminRole->syncPermissions([
@@ -99,6 +101,7 @@ class RolePermissionSeeder extends Seeder
         }
 
         // Instructor - view announcements, courses, messages, can enroll
+        /** @var Role $instructorRole */
         $instructorRole = Role::where('name', 'instructor')->first();
         if ($instructorRole) {
             $instructorRole->syncPermissions([
@@ -115,6 +118,7 @@ class RolePermissionSeeder extends Seeder
         }
 
         // Employee/User - view announcements, courses, messages
+        /** @var Role $userRole */
         $userRole = Role::where('name', 'user')->first();
         if ($userRole) {
             $userRole->syncPermissions([
@@ -128,6 +132,7 @@ class RolePermissionSeeder extends Seeder
         }
 
         // Employee role - same as user
+        /** @var Role $employeeRole */
         $employeeRole = Role::where('name', 'employee')->first();
         if ($employeeRole) {
             $employeeRole->syncPermissions([
