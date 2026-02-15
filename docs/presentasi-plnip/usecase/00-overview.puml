@@ -1,0 +1,118 @@
+@startuml
+!include _style-usecase.puml
+left to right direction
+skinparam ranksep 38
+skinparam nodesep 32
+
+title UC-00 Overview - PLN Learning Hub (Ringkasan Fitur Utama)
+
+actor "User/Peserta" as User
+actor "Instructor" as Instructor
+actor "Admin" as Admin
+actor "Super Admin" as SuperAdmin
+
+rectangle "PLH Internal System" {
+  rectangle "Akun & Informasi" {
+    usecase "Login/Logout" as UC_Auth
+    usecase "Kelola Profil" as UC_Profile
+    usecase "Lihat Dashboard" as UC_Dashboard
+    usecase "Lihat Pengumuman" as UC_AnnRead
+    usecase "Kelola Pengumuman" as UC_AnnManage
+    usecase "Tracking Pengumuman" as UC_AnnTracking
+  }
+
+  rectangle "Komunikasi & Ticketing" {
+    usecase "Pembelajaran & Sertifikat" as UC_Learning
+    usecase "Direct Message & Class Chat" as UC_Chat
+    usecase "Buat Support Ticket" as UC_SupportCreate
+    usecase "Kelola Support Ticket" as UC_SupportManage
+    usecase "Kelola Escalation Ticket" as UC_EscManage
+  }
+
+  rectangle "Governance & Integrasi" {
+    usecase "Kelola User & Hak Akses" as UC_Gov
+    usecase "Kelola CMS Landing Page" as UC_CMS
+    usecase "Integrasi Moodle - SSO dan Sync" as UC_Moodle
+    usecase "Integrasi ERP - Sync User/Role" as UC_ERP
+    usecase "AI Assistant & Course Assistant" as UC_AI
+  }
+}
+
+User --> UC_Auth
+User --> UC_Profile
+User --> UC_Dashboard
+User --> UC_AnnRead
+User --> UC_Learning
+User --> UC_Chat
+User --> UC_SupportCreate
+User --> UC_Moodle
+User --> UC_AI
+
+Instructor --> UC_Auth
+Instructor --> UC_Profile
+Instructor --> UC_Dashboard
+Instructor --> UC_AnnRead
+Instructor --> UC_AnnManage
+Instructor --> UC_Learning
+Instructor --> UC_Chat
+Instructor --> UC_SupportCreate
+Instructor --> UC_Moodle
+Instructor --> UC_AI
+
+Admin --> UC_Auth
+Admin --> UC_Profile
+Admin --> UC_Dashboard
+Admin --> UC_AnnRead
+Admin --> UC_AnnManage
+Admin --> UC_AnnTracking
+Admin --> UC_Learning
+Admin --> UC_Chat
+Admin --> UC_SupportCreate
+Admin --> UC_SupportManage
+Admin --> UC_EscManage
+Admin --> UC_Moodle
+Admin --> UC_AI
+
+SuperAdmin --> UC_Auth
+SuperAdmin --> UC_Profile
+SuperAdmin --> UC_Dashboard
+SuperAdmin --> UC_AnnRead
+SuperAdmin --> UC_AnnManage
+SuperAdmin --> UC_AnnTracking
+SuperAdmin --> UC_Learning
+SuperAdmin --> UC_Chat
+SuperAdmin --> UC_SupportCreate
+SuperAdmin --> UC_SupportManage
+SuperAdmin --> UC_EscManage
+SuperAdmin --> UC_Gov
+SuperAdmin --> UC_CMS
+SuperAdmin --> UC_Moodle
+SuperAdmin --> UC_ERP
+SuperAdmin --> UC_AI
+
+UC_Auth -[hidden]down- UC_Profile
+UC_Profile -[hidden]down- UC_Dashboard
+UC_Dashboard -[hidden]down- UC_AnnRead
+UC_AnnRead -[hidden]down- UC_AnnManage
+UC_AnnManage -[hidden]down- UC_AnnTracking
+UC_AnnTracking -[hidden]down- UC_Learning
+UC_Learning -[hidden]down- UC_Chat
+UC_Chat -[hidden]down- UC_SupportCreate
+UC_SupportCreate -[hidden]down- UC_SupportManage
+UC_SupportManage -[hidden]down- UC_EscManage
+UC_EscManage -[hidden]down- UC_Gov
+UC_Gov -[hidden]down- UC_CMS
+UC_CMS -[hidden]down- UC_Moodle
+UC_Moodle -[hidden]down- UC_ERP
+UC_ERP -[hidden]down- UC_AI
+
+User -[hidden]down- Instructor
+Admin -[hidden]down- SuperAdmin
+Instructor -[hidden]right- Admin
+
+note bottom of UC_Moodle
+  Integrasi Moodle di overview mencakup:
+  SSO login URL dan sinkronisasi data.
+end note
+
+@enduml

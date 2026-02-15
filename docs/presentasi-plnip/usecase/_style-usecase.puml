@@ -1,0 +1,40 @@
+' Standard style for presentation-friendly UML use case diagrams
+skinparam backgroundColor #ECECEC
+skinparam defaultFontName Segoe UI
+skinparam defaultFontSize 14
+skinparam linetype ortho
+skinparam shadowing false
+
+skinparam ArrowColor #F08A00
+skinparam ArrowThickness 1.4
+
+skinparam rectangle {
+  BorderColor #2B3990
+  BackgroundColor #F6F7FB
+  FontColor #2B3990
+  BorderThickness 1.4
+  RoundCorner 8
+}
+
+skinparam package {
+  BorderColor #2B3990
+  BackgroundColor #F6F7FB
+  FontColor #2B3990
+  BorderThickness 1.2
+}
+
+skinparam actor {
+  BorderColor #1F2A8A
+  BackgroundColor #FF8A00
+  FontColor #1F2A8A
+}
+
+skinparam usecase {
+  BackgroundColor #FF8A00
+  BorderColor #1F2A8A
+  FontColor #10237A
+  BorderThickness 1.5
+}
+
+skinparam usecaseStereotypeFontColor #2B3990
+skinparam usecaseStereotypeFontStyle bold

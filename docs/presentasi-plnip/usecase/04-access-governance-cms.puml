@@ -1,0 +1,35 @@
+@startuml uc04
+!include _style-usecase.puml
+left to right direction
+skinparam linetype ortho
+skinparam ranksep 38
+skinparam nodesep 34
+
+title UC-04 - Manajemen User, Role, Permission, Activity Log, CMS
+
+actor "Super Admin" as SuperAdmin
+
+rectangle "PLN Learning Hub System - Modul Governance" {
+  (Kelola User) as UC_UserMgmt
+  (Kelola Role) as UC_RoleMgmt
+  (Kelola Permission) as UC_PermMgmt
+  (Lihat Activity Log) as UC_ActivityLog
+  (Kelola CMS Landing Page) as UC_CMS
+}
+
+SuperAdmin --> UC_UserMgmt
+SuperAdmin --> UC_RoleMgmt
+SuperAdmin --> UC_PermMgmt
+SuperAdmin --> UC_ActivityLog
+SuperAdmin --> UC_CMS
+
+note right of UC_CMS
+  Cakupan CMS:
+  - Settings
+  - Hero images
+  - Login backgrounds
+  - Leaders
+  - Partners
+end note
+
+@enduml

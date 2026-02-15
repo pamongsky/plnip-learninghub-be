@@ -1,0 +1,56 @@
+@startuml uc02
+!include _style-usecase.puml
+left to right direction
+skinparam linetype ortho
+skinparam ranksep 38
+skinparam nodesep 34
+
+title UC-02 - Pembelajaran, Enrollment, Progress, Sertifikat
+
+actor "User/Peserta" as User
+actor "Instructor" as Instructor
+actor "Admin" as Admin
+actor "Super Admin" as SuperAdmin
+
+rectangle "PLN Learning Hub System - Modul Pembelajaran" {
+  (Lihat Katalog Course) as UC_CourseCatalog
+  (Lihat My Courses) as UC_MyCourses
+  (Lihat Detail Course) as UC_CourseDetail
+  (Akses Course Moodle - SSO) as UC_CourseSSO
+  (Kelola Enrollment) as UC_Enrollment
+  (Lihat Progress Pembelajaran) as UC_Progress
+  (Lihat Sertifikat) as UC_CertView
+  (Unduh Sertifikat) as UC_CertDownload
+  (Kelola Sertifikat) as UC_CertAdmin
+}
+
+User --> UC_CourseCatalog
+User --> UC_MyCourses
+User --> UC_CourseDetail
+User --> UC_CourseSSO
+User --> UC_Progress
+User --> UC_CertView
+User --> UC_CertDownload
+
+Instructor --> UC_CourseCatalog
+Instructor --> UC_CourseDetail
+Instructor --> UC_Progress
+
+Admin -left-> UC_Enrollment
+Admin -left-> UC_CertAdmin
+SuperAdmin -left-> UC_Enrollment
+SuperAdmin -left-> UC_CertAdmin
+
+User -[hidden]down- Instructor
+Admin -[hidden]down- SuperAdmin
+Instructor -[hidden]right- Admin
+
+note right of UC_CertAdmin
+  Cakupan Kelola Sertifikat:
+  - Upload per user
+  - Upload bulk ZIP
+  - Lihat seluruh sertifikat
+  - Revoke sertifikat
+end note
+
+@enduml

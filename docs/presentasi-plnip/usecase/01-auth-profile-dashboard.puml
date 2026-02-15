@@ -1,0 +1,84 @@
+@startuml auth
+!include _style-usecase.puml
+left to right direction
+skinparam linetype ortho
+skinparam ranksep 40
+skinparam nodesep 38
+
+title Use Case - Auth, Profil, Dashboard, Pengumuman
+
+actor "User/Peserta" as User
+actor "Instructor" as Instructor
+actor "Admin" as Admin
+actor "Super Admin" as SuperAdmin
+
+rectangle "PLH Internal System" {
+  ' Use case inti (standar)
+  (Login) as UC_Login
+  (Logout) as UC_Logout
+  (Lihat Dashboard) as UC_Dashboard
+  (Lihat Pengumuman) as UC_AnnRead
+  (Kelola Profil) as UC_Profile
+
+  ' Pengumuman per role
+  (Kelola Pengumuman Instructor) as UC_AnnInstructor
+  (Kelola Pengumuman Admin) as UC_AnnAdmin
+  (Kelola Pengumuman Global) as UC_AnnSuper
+  (Tracking Pengumuman) as UC_AnnTracking
+}
+
+' Aktor kiri (2)
+User --> UC_Login
+User --> UC_Logout
+User --> UC_Dashboard
+User --> UC_AnnRead
+User --> UC_Profile
+
+Instructor --> UC_Login
+Instructor --> UC_Logout
+Instructor --> UC_Dashboard
+Instructor --> UC_AnnRead
+Instructor --> UC_Profile
+Instructor --> UC_AnnInstructor
+
+' Aktor kanan (2)
+Admin --> UC_Login
+Admin --> UC_Logout
+Admin --> UC_Dashboard
+Admin --> UC_AnnRead
+Admin --> UC_Profile
+Admin --> UC_AnnAdmin
+Admin --> UC_AnnTracking
+
+SuperAdmin --> UC_Login
+SuperAdmin --> UC_Logout
+SuperAdmin --> UC_Dashboard
+SuperAdmin --> UC_AnnRead
+SuperAdmin --> UC_Profile
+SuperAdmin --> UC_AnnSuper
+SuperAdmin --> UC_AnnTracking
+
+' Susunan use case agar rapi
+UC_Login -[hidden]down- UC_Logout
+UC_Logout -[hidden]down- UC_Dashboard
+UC_Dashboard -[hidden]down- UC_AnnRead
+UC_AnnRead -[hidden]down- UC_Profile
+UC_Profile -[hidden]down- UC_AnnInstructor
+UC_AnnInstructor -[hidden]down- UC_AnnAdmin
+UC_AnnAdmin -[hidden]down- UC_AnnSuper
+UC_AnnSuper -[hidden]down- UC_AnnTracking
+
+' Posisi aktor: kiri 2, kanan 2
+User -[hidden]down- Instructor
+Admin -[hidden]down- SuperAdmin
+Instructor -[hidden]right- Admin
+
+note right of UC_Profile
+  Cakupan Kelola Profil:
+  - Ubah Profil
+  - Ubah Password
+  - Upload Avatar
+  - Hapus Avatar
+end note
+
+@enduml

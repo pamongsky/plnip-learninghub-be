@@ -1,0 +1,74 @@
+@startuml uc05
+!include _style-usecase.puml
+left to right direction
+skinparam linetype ortho
+skinparam ranksep 38
+skinparam nodesep 34
+
+title UC-05 - Integrasi Moodle, ERP, AI
+
+actor "User/Peserta" as User
+actor "Instructor" as Instructor
+actor "Admin" as Admin
+actor "Super Admin" as SuperAdmin
+actor "Sistem Moodle" as Moodle
+actor "Sistem ERP" as ERP
+actor "Layanan AI" as AI
+
+rectangle "PLN Learning Hub System - Modul Integrasi" {
+  (Generate Moodle Login URL) as UC_MoodleLoginUrl
+  (Sinkronisasi Moodle) as UC_MoodleSync
+  (Sinkronisasi ERP User & Role) as UC_ERPSync
+  (Gunakan AI Assistant) as UC_AI
+  (Gunakan Course Assistant) as UC_CourseAI
+}
+
+User --> UC_MoodleLoginUrl
+User --> UC_AI
+User --> UC_CourseAI
+
+Instructor --> UC_MoodleLoginUrl
+Instructor --> UC_AI
+Instructor --> UC_CourseAI
+
+Admin --> UC_MoodleLoginUrl
+Admin --> UC_MoodleSync
+Admin --> UC_AI
+Admin --> UC_CourseAI
+
+SuperAdmin --> UC_MoodleLoginUrl
+SuperAdmin --> UC_MoodleSync
+SuperAdmin --> UC_ERPSync
+SuperAdmin --> UC_AI
+SuperAdmin --> UC_CourseAI
+
+Moodle --> UC_MoodleLoginUrl
+Moodle --> UC_MoodleSync
+ERP --> UC_ERPSync
+AI --> UC_AI
+AI --> UC_CourseAI
+
+User -[hidden]down- Instructor
+Instructor -[hidden]down- Admin
+Admin -[hidden]down- SuperAdmin
+Instructor -[hidden]right- Moodle
+Moodle -[hidden]down- ERP
+ERP -[hidden]down- AI
+
+note right of UC_MoodleSync
+  Cakupan Sync Moodle:
+  - Users
+  - Courses
+  - Enrollments
+  - Categories
+  - Status/History
+  - Full Sync (super admin)
+end note
+
+note right of UC_ERPSync
+  Cakupan Sync ERP:
+  - Sinkronisasi user
+  - Role mapping dari access_group
+end note
+
+@enduml

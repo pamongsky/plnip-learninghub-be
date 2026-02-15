@@ -1,0 +1,64 @@
+@startuml uc03
+!include _style-usecase.puml
+left to right direction
+skinparam linetype ortho
+skinparam ranksep 38
+skinparam nodesep 34
+
+title UC-03 - Komunikasi, Support Ticket, Escalation
+
+actor "User/Peserta" as User
+actor "Instructor" as Instructor
+actor "Admin" as Admin
+actor "Super Admin" as SuperAdmin
+
+rectangle "PLN Learning Hub System - Modul Komunikasi & Support" {
+  (Direct Message) as UC_DM
+  (Class Chat) as UC_ClassChat
+  (Buat Support Ticket) as UC_SupportCreate
+  (Kelola Support Ticket) as UC_SupportManage
+  (Eskalasi Support Ticket) as UC_SupportEscalate
+  (Kelola Escalation Ticket) as UC_EscManage
+}
+
+User --> UC_DM
+User --> UC_ClassChat
+User --> UC_SupportCreate
+
+Instructor --> UC_DM
+Instructor --> UC_ClassChat
+Instructor --> UC_SupportCreate
+
+Admin --> UC_DM
+Admin --> UC_ClassChat
+Admin --> UC_SupportCreate
+Admin --> UC_SupportManage
+Admin --> UC_SupportEscalate
+Admin --> UC_EscManage
+
+SuperAdmin --> UC_DM
+SuperAdmin --> UC_ClassChat
+SuperAdmin --> UC_SupportCreate
+SuperAdmin --> UC_SupportManage
+SuperAdmin --> UC_SupportEscalate
+SuperAdmin --> UC_EscManage
+
+User -[hidden]down- Instructor
+Admin -[hidden]down- SuperAdmin
+Instructor -[hidden]right- Admin
+
+note right of UC_SupportManage
+  Cakupan Kelola Support:
+  - Lihat daftar/detail tiket
+  - Balas tiket
+  - Ubah status tiket
+end note
+
+note right of UC_EscManage
+  Cakupan Escalation:
+  - Lihat daftar/detail escalation
+  - Balas escalation
+  - Ubah status escalation
+end note
+
+@enduml
