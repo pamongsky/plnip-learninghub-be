@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
 use App\Events\AnnouncementCreated;
@@ -23,11 +24,11 @@ class AnnouncementController extends Controller
         // 2. UNIT (Admin): Visible if target_role matches user role or 'all'
         // 3. CLASS (Instructor): Visible if user enrolled in target_classes or 'all'
         
-        $userRole = $request->user()->hasRole('instructor') ? 'instructor' : 'user';
+        $userRole = $request->user()->hasRole('instructor') ? 'instructor' : 'learner';
         
         // Get user's enrolled course IDs if they are a student
         $enrolledCourseIds = [];
-        if ($userRole === 'user') {
+        if ($userRole === 'learner') {
             $enrolledCourseIds = $request->user()->courses()->pluck('courses.id')->toArray();
         }
 
@@ -42,10 +43,10 @@ class AnnouncementController extends Controller
 
                             // A. Role-based Targeting (from Admin, no target_classes)
                             //    Match if target_role = 'all' or matches current user role
-                            // 'learner' is legacy alias for 'user'
+                            // Include 'user' as legacy alias for 'learner' (backward compat)
                             $roleMatches = ['all', $userRole];
-                            if ($userRole === 'user') {
-                                $roleMatches[] = 'learner';
+                            if ($userRole === 'learner') {
+                                $roleMatches[] = 'user'; // legacy: old announcements stored as 'user'
                             }
 
                             $filterQ->where(function ($roleQ) use ($roleMatches) {
@@ -54,8 +55,8 @@ class AnnouncementController extends Controller
                             });
 
                             // B. Class-based Targeting (from Instructor, has target_classes)
-                            //    ONLY for students/users — instructor should NOT see these
-                            if ($userRole === 'user' && !empty($enrolledCourseIds)) {
+                            //    ONLY for learners — instructor should NOT see these
+                            if ($userRole === 'learner' && !empty($enrolledCourseIds)) {
                                 $filterQ->orWhere(function ($classQ) use ($enrolledCourseIds) {
                                     $classQ->whereNotNull('target_classes')
                                            ->where(function ($jsonQ) use ($enrolledCourseIds) {
@@ -116,18 +117,15 @@ class AnnouncementController extends Controller
             ];
         });
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'announcements' => $mappedAnnouncements,
-                'pagination' => [
-                    'current_page' => $announcements->currentPage(),
-                    'last_page' => $announcements->lastPage(),
-                    'per_page' => $announcements->perPage(),
-                    'total' => $announcements->total(),
-                ],
+        return ApiResponse::success([
+            'announcements' => $mappedAnnouncements,
+            'pagination' => [
+                'current_page' => $announcements->currentPage(),
+                'last_page' => $announcements->lastPage(),
+                'per_page' => $announcements->perPage(),
+                'total' => $announcements->total(),
             ],
-        ], 200);
+        ]);
     }
 
     public function show($id)
@@ -170,10 +168,10 @@ class AnnouncementController extends Controller
         $limit = $request->input('limit', 5);
 
         $user = $request->user();
-        $userRole = $user?->hasRole('instructor') ? 'instructor' : 'user';
+        $userRole = $user?->hasRole('instructor') ? 'instructor' : 'learner';
 
         $enrolledCourseIds = [];
-        if ($userRole === 'user' && $user) {
+        if ($userRole === 'learner' && $user) {
             $enrolledCourseIds = $user->courses()->pluck('courses.id')->toArray();
         }
 
@@ -187,8 +185,8 @@ class AnnouncementController extends Controller
                       $unitQ->where('scope', 'unit')
                             ->where(function ($filterQ) use ($userRole, $enrolledCourseIds) {
                                 $roleMatches = ['all', $userRole];
-                                if ($userRole === 'user') {
-                                    $roleMatches[] = 'learner';
+                                if ($userRole === 'learner') {
+                                    $roleMatches[] = 'user'; // legacy: old announcements stored as 'user'
                                 }
 
                                 $filterQ->where(function ($roleQ) use ($roleMatches) {
@@ -196,8 +194,8 @@ class AnnouncementController extends Controller
                                           ->whereIn('target_role', $roleMatches);
                                 });
 
-                                // Class-based: only for students
-                                if ($userRole === 'user' && !empty($enrolledCourseIds)) {
+                                // Class-based: only for learners
+                                if ($userRole === 'learner' && !empty($enrolledCourseIds)) {
                                     $filterQ->orWhere(function ($classQ) use ($enrolledCourseIds) {
                                         $classQ->whereNotNull('target_classes')
                                                ->where(function ($jsonQ) use ($enrolledCourseIds) {

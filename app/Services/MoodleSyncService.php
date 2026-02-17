@@ -31,6 +31,7 @@ class MoodleSyncService
             'users' => $this->syncUsers(),
             'courses' => $this->syncCourses(),
             'enrollments' => $this->syncEnrollments(),
+            'instructor_roles' => $this->syncInstructorRoles(),
             'categories' => $this->syncCategories(),
             'completed_at' => now()->toDateTimeString(),
             'duration' => now()->diffInSeconds($this->startTime),
@@ -74,25 +75,28 @@ class MoodleSyncService
                     // Check if user exists in Portal by email
                     $portalUser = User::where('email', $mUser->email)->first();
 
-                    $userData = [
-                        'name' => trim($mUser->firstname . ' ' . $mUser->lastname),
-                        'email' => $mUser->email,
-                        'moodle_user_id' => $mUser->id,
-                        'is_active' => true,
-                    ];
-
                     if ($portalUser) {
-                        // Update existing user
-                        $portalUser->update($userData);
+                        // Update existing user — only sync moodle_user_id & is_active.
+                        // Do NOT overwrite name/email: portal is master data for user profiles.
+                        $portalUser->update([
+                            'moodle_user_id' => $mUser->id,
+                            'is_active' => true,
+                        ]);
                         $updated++;
                         $this->log('debug', "Updated user: {$mUser->email}");
                     } else {
                         // Create new user (assign default password, akan di-reset via email)
-                        $userData['password'] = bcrypt('password123'); // Temporary
+                        $userData = [
+                            'name' => trim($mUser->firstname . ' ' . $mUser->lastname),
+                            'email' => $mUser->email,
+                            'moodle_user_id' => $mUser->id,
+                            'is_active' => true,
+                            'password' => bcrypt('password123'), // Temporary
+                        ];
                         $newUser = User::create($userData);
 
-                        // Assign default role 'user' (peserta)
-                        $newUser->assignRole('user');
+                        // Assign default role 'learner' (peserta)
+                        $newUser->assignRole('learner');
 
                         $added++;
                         $this->log('debug', "Created new user: {$mUser->email}");
@@ -100,6 +104,23 @@ class MoodleSyncService
                 } catch (\Exception $e) {
                     $errors++;
                     $this->log('error', "Failed to sync user {$mUser->email}: " . $e->getMessage());
+                }
+            }
+
+            // Deactivate users that are suspended in Moodle
+            $suspendedEmails = DB::connection('moodle')
+                ->table('user')
+                ->where('deleted', 0)
+                ->whereNotIn('id', [1, 2])
+                ->where('suspended', 1)
+                ->pluck('email')
+                ->toArray();
+
+            foreach ($suspendedEmails as $email) {
+                $portalUser = User::where('email', $email)->first();
+                if ($portalUser && !$portalUser->hasAnyRole(['super-admin', 'admin'])) {
+                    $portalUser->update(['is_active' => false]);
+                    $this->log('debug', "Deactivated suspended Moodle user: {$email}");
                 }
             }
 
@@ -112,6 +133,7 @@ class MoodleSyncService
                 'updated' => $updated,
                 'skipped' => $skipped,
                 'errors' => $errors,
+                'suspended_deactivated' => count($suspendedEmails),
                 'duration_seconds' => $duration,
             ];
 
@@ -301,6 +323,142 @@ class MoodleSyncService
             DB::rollBack();
             $this->log('error', 'Enrollment Sync failed: ' . $e->getMessage());
             throw $e;
+        }
+    }
+
+    /**
+     * SYNC INSTRUCTOR ROLES dari Moodle role_assignments
+     * Reads Moodle teacher assignments → updates courses.instructor_id + portal user roles
+     * Moodle role IDs: 3 = editingteacher, 4 = teacher, 5 = student, 1 = manager/admin
+     */
+    public function syncInstructorRoles(): array
+    {
+        $this->log('info', 'Starting Instructor Role Sync');
+        $startTime = microtime(true);
+
+        try {
+            $updated = 0;
+            $errors = 0;
+
+            // Get all teacher-role assignments in Moodle (course context = contextlevel 50)
+            $teacherAssignments = DB::connection('moodle')
+                ->table('role_assignments as ra')
+                ->join('context as ctx', 'ra.contextid', '=', 'ctx.id')
+                ->join('user as u', 'ra.userid', '=', 'u.id')
+                ->where('ctx.contextlevel', 50) // Course context
+                ->whereIn('ra.roleid', [3, 4])   // 3 = editingteacher, 4 = teacher
+                ->where('u.deleted', 0)
+                ->where('u.suspended', 0)
+                ->select(
+                    'u.email',
+                    'u.id as moodle_user_id',
+                    'ctx.instanceid as moodle_course_id',
+                    'ra.roleid'
+                )
+                ->get();
+
+            $this->log('info', "Found {$teacherAssignments->count()} teacher assignments in Moodle");
+
+            // Build priority map per course: prefer editingteacher (roleid=3), skip suspended
+            // For each course, pick ONE instructor to display — skip admin/super-admin portal users
+            $preferredByCourse = [];
+            foreach ($teacherAssignments as $assignment) {
+                $portalUserCheck = User::where('email', $assignment->email)->first();
+                // Admin/super-admin cannot be shown as course instructor
+                if ($portalUserCheck && $portalUserCheck->hasAnyRole(['super-admin', 'admin'])) {
+                    continue;
+                }
+                $courseId = $assignment->moodle_course_id;
+                // Prefer editingteacher (3) over non-editing teacher (4)
+                if (!isset($preferredByCourse[$courseId]) || (int)$assignment->roleid === 3) {
+                    $preferredByCourse[$courseId] = $assignment;
+                }
+            }
+
+            foreach ($preferredByCourse as $moodleCourseId => $assignment) {
+                try {
+                    // Find portal user
+                    $portalUser = User::where('email', $assignment->email)->first();
+                    if (!$portalUser) continue;
+
+                    // Find portal course
+                    $portalCourse = Course::where('moodle_course_id', $moodleCourseId)->first();
+                    if (!$portalCourse) continue;
+
+                    // Skip admin/super-admin: they are never shown as course instructor
+                    if ($portalUser->hasAnyRole(['super-admin', 'admin'])) {
+                        $this->log('debug', "Skipped instructor_id for admin user: {$assignment->email}");
+                        continue;
+                    }
+
+                    // Promote role: learner → instructor (only for non-admin users)
+                    if ($portalUser->hasRole('learner')) {
+                        $portalUser->removeRole('learner');
+                        $portalUser->assignRole('instructor');
+                        $this->log('debug', "Promoted to instructor: {$assignment->email}");
+                    }
+
+                    // Set course instructor_id
+                    if ($portalCourse->instructor_id !== $portalUser->id) {
+                        $portalCourse->update(['instructor_id' => $portalUser->id]);
+                        $this->log('debug', "Set instructor for course {$portalCourse->title}: {$assignment->email}");
+                    }
+
+                    $updated++;
+                } catch (\Exception $e) {
+                    $errors++;
+                    $this->log('error', "Failed instructor sync for {$assignment->email}: " . $e->getMessage());
+                }
+            }
+
+            // Clear instructor_id from courses whose instructor is no longer a teacher in Moodle
+            // Build per-course SET of teacher emails (multiple teachers allowed per course)
+            $teachersByCourse = [];
+            foreach ($teacherAssignments as $ta) {
+                $teachersByCourse[$ta->moodle_course_id][] = $ta->email;
+            }
+            $cleared = 0;
+
+            $coursesWithInstructor = Course::whereNotNull('instructor_id')
+                ->whereNotNull('moodle_course_id')
+                ->with('instructor')
+                ->get();
+            foreach ($coursesWithInstructor as $course) {
+                if (!$course->instructor) continue;
+
+                // Clear if current instructor is admin/super-admin (should never be set as instructor)
+                if ($course->instructor->hasAnyRole(['super-admin', 'admin'])) {
+                    $course->update(['instructor_id' => null]);
+                    $this->log('debug', "Cleared instructor from {$course->title}: was admin user ({$course->instructor->email})");
+                    $cleared++;
+                    continue;
+                }
+
+                $moodleTeachers = $teachersByCourse[$course->moodle_course_id] ?? [];
+
+                // Clear if instructor is not among the Moodle teachers for this course
+                if (!in_array($course->instructor->email, $moodleTeachers)) {
+                    $course->update(['instructor_id' => null]);
+                    $this->log('debug', "Cleared instructor from {$course->title}: no longer a teacher in Moodle");
+                    $cleared++;
+                }
+            }
+
+            $duration = round(microtime(true) - $startTime, 2);
+            $result = [
+                'total_assignments' => $teacherAssignments->count(),
+                'updated' => $updated,
+                'cleared' => $cleared,
+                'errors' => $errors,
+                'duration_seconds' => $duration,
+            ];
+
+            $this->log('info', "Instructor Role Sync completed: " . json_encode($result));
+            return $result;
+
+        } catch (\Exception $e) {
+            $this->log('error', 'Instructor Role Sync failed: ' . $e->getMessage());
+            return ['error' => $e->getMessage()];
         }
     }
 

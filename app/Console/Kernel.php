@@ -16,7 +16,7 @@ class Kernel extends ConsoleKernel
         if (config('erp.enabled')) {
             $syncTime = config('erp.schedule', '02:00');
             [$hour, $minute] = explode(':', $syncTime);
-            
+
             $schedule->command('erp:sync')
                 ->dailyAt($syncTime)
                 ->withoutOverlapping()
@@ -27,6 +27,16 @@ class Kernel extends ConsoleKernel
                     \Illuminate\Support\Facades\Log::channel('security')->error('ERP sync scheduled task failed');
                 });
         }
+
+        // Clean up expired password reset OTPs every hour
+        $schedule->command('otp:cleanup')
+            ->hourly()
+            ->withoutOverlapping();
+
+        // Clean up expired Sanctum tokens daily
+        $schedule->command('sanctum:cleanup')
+            ->daily()
+            ->withoutOverlapping();
     }
 
     /**

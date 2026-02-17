@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseEnrollment;
@@ -38,27 +39,32 @@ class CourseController extends Controller
      */
     public function myCourses(Request $request)
     {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        $courses = $user->courses()
-            ->with('instructor:id,name,avatar')
-            ->withCount('enrollments as participants_count')
-            ->wherePivot('status', 'active')
-            ->orderBy('course_enrollments.created_at', 'desc')
-            ->get()
-            ->map(function ($course) {
-                // Determine Moodle URL for direct access
-                // Format: http://moodle-url/course/view.php?id=MOODLE_COURSE_ID
-                $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
-                $course->moodle_url = $course->moodle_course_id
-                    ? "{$moodleBase}/course/view.php?id={$course->moodle_course_id}"
-                    : null;
-                return $course;
-            });
+            $courses = $user->courses()
+                ->with('instructor:id,name,avatar')
+                ->withCount('enrollments as participants_count')
+                ->wherePivot('status', 'active')
+                ->orderBy('course_enrollments.created_at', 'desc')
+                ->get()
+                ->map(function ($course) {
+                    // Determine Moodle URL for direct access
+                    $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
+                    $course->moodle_url = $course->moodle_course_id
+                        ? "{$moodleBase}/course/view.php?id={$course->moodle_course_id}"
+                        : null;
+                    return $course;
+                });
 
-        return response()->json([
-            'data' => $courses
-        ]);
+            return ApiResponse::success($courses);
+        } catch (\Exception $e) {
+            Log::error('My Courses Error: ' . $e->getMessage(), [
+                'user_id' => $request->user()?->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ApiResponse::serverError('Gagal memuat kursus saya', $e->getMessage());
+        }
     }
 
     /**
@@ -71,9 +77,7 @@ class CourseController extends Controller
     {
         // Permission check: Super admin dan Admin bisa sync
         if (!$request->user() || !$request->user()->hasRole(['super-admin', 'admin'])) {
-            return response()->json([
-                'message' => 'Hanya admin yang bisa sync courses dari Moodle'
-            ], 403);
+            return ApiResponse::forbidden('Hanya admin yang bisa sync courses dari Moodle');
         }
 
         try {
@@ -82,17 +86,11 @@ class CourseController extends Controller
             $syncedCount = 0;
 
             // 1. Get from Moodle DB Directly (Oracle)
-            // Table: mdl_course
-            // Exclude id 1 (Site root)
             $moodleCourses = DB::connection('moodle')->table('course')
                 ->where('id', '!=', 1)
                 ->get();
 
             foreach ($moodleCourses as $mCourse) {
-                // Map fields
-                // Oracle usually returns lowercase keys if configured, but check case
-                // We assume standard Laravel-OCI behavior (lowercase)
-
                 Course::updateOrCreate(
                     ['moodle_course_id' => $mCourse->id],
                     [
@@ -108,22 +106,17 @@ class CourseController extends Controller
                 $syncedCount++;
             }
 
-            // 2. Deactivate courses in Portal that are deleted/hidden in Moodle?
-            // For now, let's just sync additions/updates.
-            // Full sync might require checking diffs.
-
             DB::commit();
 
-            return response()->json([
-                'message' => "Berhasil sinkronisasi $syncedCount kelas dari Moodle (Direct DB)",
-            ]);
+            return ApiResponse::success(
+                ['synced_count' => $syncedCount],
+                "Berhasil sinkronisasi $syncedCount kelas dari Moodle (Direct DB)"
+            );
 
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Course Sync Error: " . $e->getMessage());
-            return response()->json([
-                'message' => 'Gagal sinkronisasi: ' . $e->getMessage()
-            ], 500);
+            return ApiResponse::serverError('Gagal sinkronisasi', $e->getMessage());
         }
     }
 
@@ -272,11 +265,20 @@ class CourseController extends Controller
             }
 
             // --- MOODLE DIRECT DB SYNC ---
-            if ($course->moodle_course_id) {
-                $moodleConn = DB::connection('moodle');
+            $moodleUser = null;
+            $moodleCreatedUser = false;
+            $moodleCreatedEnrollment = false;
+            $moodleCreatedRole = false;
 
-                // 1. Find or CREATE Moodle User (Hybrid System)
-                $moodleUser = $moodleConn->table('user')->where('email', $user->email)->first();
+            if ($course->moodle_course_id) {
+                try {
+                    $moodleConn = DB::connection('moodle');
+
+                    // Test Moodle connection first
+                    $moodleConn->select('SELECT 1 FROM DUAL');
+
+                    // 1. Find or CREATE Moodle User (Hybrid System)
+                    $moodleUser = $moodleConn->table('user')->where('email', $user->email)->first();
 
                 if (!$moodleUser) {
                     // Auto-create user in Moodle if not exists
@@ -296,6 +298,7 @@ class CourseController extends Controller
                     ]);
 
                     $moodleUser = $moodleConn->table('user')->where('id', $moodleUserId)->first();
+                    $moodleCreatedUser = true;
                     Log::info("Moodle user created with ID: {$moodleUserId}");
                 }
 
@@ -395,13 +398,30 @@ class CourseController extends Controller
                         'userid' => $moodleUser->id,
                         'timemodified' => now()->timestamp,
                         'modifierid' => 2,
+                        'component' => ' ', // Oracle: empty string = NULL, use space instead
                         'itemid' => 0,
                         'sortorder' => 0
                     ]);
+                    $moodleCreatedRole = true;
                 }
-            }
+            } catch (\Exception $moodleException) {
+                // Moodle operation failed - rollback Portal transaction
+                DB::rollBack();
 
-            // --- LOCAL UPDATE ---
+                Log::error("Moodle enrollment failed", [
+                    'user_id' => $user->id,
+                    'course_id' => $course->id,
+                    'error' => $moodleException->getMessage(),
+                ]);
+
+                return response()->json([
+                    'message' => 'Gagal mendaftar user ke Moodle. Silakan coba lagi atau hubungi administrator.',
+                    'error' => config('app.debug') ? $moodleException->getMessage() : null,
+                ], 500);
+            }
+        }
+
+        // --- LOCAL UPDATE ---
             // Reactivate if suspended, or create new if doesn't exist
             if ($existingEnrollment) {
                 $existingEnrollment->update([
@@ -427,6 +447,32 @@ class CourseController extends Controller
                 'data' => $enrollment
             ]);
 
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+
+            // Check if it's a unique constraint violation (concurrent enrollment attempt)
+            if (str_contains($e->getMessage(), 'unique constraint') ||
+                str_contains($e->getMessage(), 'UNIQUE constraint') ||
+                $e->getCode() === '23000') {
+
+                Log::warning("Concurrent enrollment attempt detected", [
+                    'user_id' => $request->user_id,
+                    'course_id' => $id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return response()->json([
+                    'message' => 'User sudah terdaftar di kelas ini',
+                ], 422);
+            }
+
+            // Other database errors
+            Log::error("Database Error during enrollment: " . $e->getMessage());
+            return response()->json([
+                'message' => 'Gagal mendaftar user ke database',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Enrollment Error: " . $e->getMessage());
@@ -437,7 +483,7 @@ class CourseController extends Controller
     }
 
     /**
-     * Unenroll/Suspend user
+     * Unenroll user from course (delete enrollment + sync to Moodle)
      */
     public function unenrollUser(Request $request, $id, $userId)
     {
@@ -453,9 +499,47 @@ class CourseController extends Controller
             ->where('user_id', $userId)
             ->firstOrFail();
 
-        $enrollment->update(['status' => 'suspended']);
+        $course = Course::findOrFail($id);
+        $user = User::findOrFail($userId);
 
-        return response()->json(['message' => 'User berhasil disuspend dari kelas']);
+        // Sync unenroll to Moodle
+        if ($course->moodle_course_id && $user->moodle_user_id) {
+            try {
+                $moodleConn = DB::connection('moodle');
+
+                // Get course context
+                $context = $moodleConn->table('context')
+                    ->where('contextlevel', 50)
+                    ->where('instanceid', $course->moodle_course_id)
+                    ->first();
+
+                if ($context) {
+                    // Remove all role assignments for this user in this course
+                    $moodleConn->table('role_assignments')
+                        ->where('contextid', $context->id)
+                        ->where('userid', $user->moodle_user_id)
+                        ->delete();
+                }
+
+                // Suspend user enrollment in Moodle (status=1 means suspended)
+                $moodleConn->table('user_enrolments')
+                    ->where('userid', $user->moodle_user_id)
+                    ->whereIn('enrolid', function ($query) use ($course) {
+                        $query->select('id')
+                            ->from('enrol')
+                            ->where('courseid', $course->moodle_course_id);
+                    })
+                    ->update(['status' => 1, 'timemodified' => time()]);
+
+            } catch (\Exception $e) {
+                Log::warning("Failed to sync unenroll to Moodle for user {$userId}: " . $e->getMessage());
+            }
+        }
+
+        // Delete enrollment from portal
+        $enrollment->delete();
+
+        return response()->json(['message' => 'User berhasil diunenroll dari kelas']);
     }
 
     /**
@@ -509,7 +593,7 @@ class CourseController extends Controller
                         'userid' => $user->moodle_user_id,
                         'timemodified' => now()->timestamp,
                         'modifierid' => 2, // admin
-                        'component' => '',
+                        'component' => ' ', // Oracle: empty string = NULL, use space instead
                         'itemid' => 0,
                         'sortorder' => 0,
                     ]);
@@ -546,6 +630,19 @@ class CourseController extends Controller
     {
         $course = Course::findOrFail($courseId);
         $user = User::findOrFail($userId);
+
+        // SECURITY: Check if user is enrolled to this course
+        $enrollment = \App\Models\CourseEnrollment::where('course_id', $courseId)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$enrollment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User tidak memiliki akses ke course ini'
+            ], 403);
+        }
 
         if (!$course->moodle_course_id) {
             return response()->json([

@@ -145,6 +145,9 @@ class ERPSyncService
      */
     private function createUserFromERP(array $empData): User
     {
+        // Use employee_id (NIP) as default password for ERP users
+        $defaultPassword = $empData['employee_id'] ?? 'TempPassword123!';
+
         $user = User::create([
             'employee_id' => $empData['employee_id'],
             'email' => $empData['email'],
@@ -156,7 +159,9 @@ class ERPSyncService
             'access_group' => $empData['access_group'] ?? 'USER',
             'is_active' => $empData['is_active'] ?? true,
             'synced_at' => now(),
-            'password' => Hash::make(Str::random(32)), // Strong random password
+            'password' => Hash::make($defaultPassword), // Use NIP as default password
+            'must_change_password' => true, // Force password change on first login
+            'account_source' => 'erp',
         ]);
 
         // Assign role berdasarkan access_group

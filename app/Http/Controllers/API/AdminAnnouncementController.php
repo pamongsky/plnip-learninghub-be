@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
 use App\Events\AnnouncementCreated;
@@ -48,12 +49,9 @@ class AdminAnnouncementController extends Controller
                 return $ann;
             });
         
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'all' => $all,
-                'mine' => $mine,
-            ],
+        return ApiResponse::success([
+            'all' => $all,
+            'mine' => $mine,
         ]);
     }
 
@@ -66,10 +64,15 @@ class AdminAnnouncementController extends Controller
             'title' => 'required|string|max:255',
             'content' => 'required|string|min:3',
             'priority' => 'required|in:informasi,umum,penting',
-            'target_role' => 'required|in:all,user,instructor',
+            'target_role' => 'required|in:all,learner,user,instructor',
             'published_at' => 'nullable|date',
             'expires_at' => 'nullable|date|after:published_at',
         ]);
+
+        // Normalize legacy 'user' value to 'learner'
+        if ($validated['target_role'] === 'user') {
+            $validated['target_role'] = 'learner';
+        }
 
         try {
             $announcement = Announcement::create([
@@ -87,17 +90,9 @@ class AdminAnnouncementController extends Controller
             // Broadcast real-time event
             broadcast(new AnnouncementCreated($announcement))->toOthers();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Pengumuman berhasil dibuat',
-                'data' => $announcement,
-            ], 201);
+            return ApiResponse::created($announcement, 'Pengumuman berhasil dibuat');
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal membuat pengumuman',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::serverError('Gagal membuat pengumuman', $e->getMessage());
         }
     }
 
@@ -113,18 +108,19 @@ class AdminAnnouncementController extends Controller
             'title' => 'required|string|max:255',
             'content' => 'required|string|min:3',
             'priority' => 'required|in:informasi,umum,penting',
-            'target_role' => 'required|in:all,user,instructor',
+            'target_role' => 'required|in:all,learner,user,instructor',
             'published_at' => 'nullable|date',
             'expires_at' => 'nullable|date|after:published_at',
         ]);
 
+        // Normalize legacy 'user' value to 'learner'
+        if ($validated['target_role'] === 'user') {
+            $validated['target_role'] = 'learner';
+        }
+
         $announcement->update($validated);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Pengumuman berhasil diperbarui',
-            'data' => $announcement,
-        ]);
+        return ApiResponse::updated($announcement, 'Pengumuman berhasil diperbarui');
     }
 
     /**
@@ -137,9 +133,6 @@ class AdminAnnouncementController extends Controller
 
         $announcement->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Pengumuman berhasil dihapus',
-        ]);
+        return ApiResponse::deleted('Pengumuman berhasil dihapus');
     }
 }

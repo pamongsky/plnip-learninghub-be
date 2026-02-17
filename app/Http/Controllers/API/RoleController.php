@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\API;
+use AppHelpersApiResponse;
 
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
@@ -162,7 +163,7 @@ class RoleController extends \App\Http\Controllers\Controller
         }
 
         // Protect built-in roles
-        if (in_array($role->name, ['super-admin', 'admin', 'instructor', 'employee', 'user'])) {
+        if (in_array($role->name, ['super-admin', 'admin', 'instructor', 'learner'])) {
             // Allow modification tapi dengan caution
         }
 
@@ -208,7 +209,7 @@ class RoleController extends \App\Http\Controllers\Controller
         }
 
         // Protect built-in roles
-        if (in_array($role->name, ['super-admin', 'admin', 'instructor', 'employee', 'user'])) {
+        if (in_array($role->name, ['super-admin', 'admin', 'instructor', 'learner'])) {
             return response()->json([
                 'message' => 'Tidak bisa delete built-in roles'
             ], 403);
@@ -249,8 +250,7 @@ class RoleController extends \App\Http\Controllers\Controller
             'super-admin' => 'Super Admin',
             'admin' => 'Admin',
             'instructor' => 'Instructor',
-            'employee' => 'Employee',
-            'user' => 'User',
+            'learner' => 'Learner',
         ];
         return $names[$roleName] ?? ucfirst($roleName);
     }
@@ -264,8 +264,7 @@ class RoleController extends \App\Http\Controllers\Controller
             'super-admin' => 'Akses penuh ke seluruh sistem',
             'admin' => 'Kelola user dan pengumuman unit',
             'instructor' => 'Kelola kelas dan lihat peserta',
-            'employee' => 'Akses dasar untuk pembelajaran',
-            'user' => 'Akses dasar untuk pembelajaran',
+            'learner' => 'Akses dasar untuk pembelajaran',
         ];
         return $descriptions[$roleName] ?? 'Role ini tidak memiliki deskripsi';
     }

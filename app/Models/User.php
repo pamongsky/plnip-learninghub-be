@@ -27,6 +27,10 @@ class User extends Authenticatable
         'role_override',
         'synced_at',
         'role_changed_at',
+        'email_verified_at',
+        'must_change_password',
+        'password_changed_at',
+        'account_source',
     ];
 
     protected $hidden = [
@@ -44,6 +48,8 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'synced_at' => 'datetime',
             'role_changed_at' => 'datetime',
+            'must_change_password' => 'boolean',
+            'password_changed_at' => 'datetime',
         ];
     }
 

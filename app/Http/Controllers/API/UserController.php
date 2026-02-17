@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\AuditLog;
 use App\Services\UserService;
 use App\Services\ERPSyncService;
+use App\Services\UserCredentialPdfService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -42,7 +43,10 @@ class UserController extends \App\Http\Controllers\Controller
             $query->where('is_active', true);
         }
 
-        $users = $query->orderBy('name')->paginate($request->get('per_page', 50));
+        // Eager load roles to prevent N+1 queries
+        $users = $query->with('roles:id,name')
+            ->orderBy('name')
+            ->paginate($request->get('per_page', 50));
 
         return response()->json($users);
     }
@@ -115,8 +119,8 @@ class UserController extends \App\Http\Controllers\Controller
                 'employee_id' => $user->employee_id,
                 'department' => $user->department ?? 'N/A',
                 'position' => $user->position ?? 'N/A',
-                'role' => $user->roles->pluck('name')->first() ?? 'user',
-                'effective_role' => $user->role_override ?? ($user->roles->pluck('name')->first() ?? 'user'),
+                'role' => $user->roles->pluck('name')->first() ?? 'learner',
+                'effective_role' => $user->role_override ?? ($user->roles->pluck('name')->first() ?? 'learner'),
                 'is_active' => (bool) $user->is_active,
                 'source' => $user->source ?? 'manual',
                 'access_group' => $user->access_group,
@@ -172,25 +176,139 @@ class UserController extends \App\Http\Controllers\Controller
             'phone' => 'nullable|string',
             'department' => 'nullable|string',
             'position' => 'nullable|string',
-            'role' => 'required|string|in:super-admin,admin,instructor,user',
-            'password' => 'nullable|string|min:8',
+            'role' => 'required|string|in:super-admin,admin,instructor,learner',
         ]);
 
         try {
             DB::beginTransaction();
 
-            $user = UserService::createUserManual($validated, $request->user());
+            $result = UserService::createUserManual($validated, $request->user());
+            $user = $result['user'];
+            $plainPassword = $result['password'];
+
+            // Generate PDF with user credentials
+            $pdfContent = UserCredentialPdfService::generateSingle([
+                'name' => $user->name,
+                'email' => $user->email,
+                'employee_id' => $user->employee_id,
+                'department' => $user->department,
+                'position' => $user->position,
+                'password' => $plainPassword,
+            ]);
 
             DB::commit();
 
             return response()->json([
-                'message' => 'User berhasil dibuat',
-                'user' => $user,
+                'success' => true,
+                'message' => 'User berhasil dibuat. Download PDF untuk melihat password.',
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'employee_id' => $user->employee_id,
+                    'department' => $user->department,
+                    'position' => $user->position,
+                    'role' => $user->getRoleNames()->first(),
+                ],
+                'pdf' => base64_encode($pdfContent), // Return PDF as base64
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
+                'success' => false,
                 'message' => 'Gagal membuat user',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Create multiple users at once (bulk creation)
+     */
+    public function storeBulk(Request $request): JsonResponse
+    {
+        // Check permission
+        if (!$request->user() || !$request->user()->hasRole('super-admin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Hanya super admin yang bisa membuat user bulk'
+            ], 403);
+        }
+
+        $request->validate([
+            'users' => 'required|array|min:1|max:100',
+            'users.*.name' => 'required|string|max:255',
+            'users.*.email' => 'required|email|distinct',
+            'users.*.employee_id' => 'nullable|distinct',
+            'users.*.phone' => 'nullable|string',
+            'users.*.department' => 'nullable|string',
+            'users.*.position' => 'nullable|string',
+            'users.*.role' => 'required|string|in:super-admin,admin,instructor,learner',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $createdUsers = [];
+            $errors = [];
+
+            foreach ($request->users as $index => $userData) {
+                try {
+                    // Check if email already exists
+                    if (User::where('email', $userData['email'])->exists()) {
+                        $errors[] = "Row " . ($index + 1) . ": Email {$userData['email']} already exists";
+                        continue;
+                    }
+
+                    // Check if employee_id already exists
+                    if (!empty($userData['employee_id']) && User::where('employee_id', $userData['employee_id'])->exists()) {
+                        $errors[] = "Row " . ($index + 1) . ": Employee ID {$userData['employee_id']} already exists";
+                        continue;
+                    }
+
+                    $result = UserService::createUserManual($userData, $request->user());
+                    $user = $result['user'];
+                    $plainPassword = $result['password'];
+
+                    $createdUsers[] = [
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'employee_id' => $user->employee_id,
+                        'department' => $user->department,
+                        'position' => $user->position,
+                        'password' => $plainPassword,
+                    ];
+                } catch (\Exception $e) {
+                    $errors[] = "Row " . ($index + 1) . ": " . $e->getMessage();
+                }
+            }
+
+            if (empty($createdUsers)) {
+                DB::rollBack();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No users were created',
+                    'errors' => $errors,
+                ], 400);
+            }
+
+            // Generate PDF for all created users
+            $pdfContent = UserCredentialPdfService::generateBulk($createdUsers);
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => count($createdUsers) . ' user(s) berhasil dibuat. Download PDF untuk melihat passwords.',
+                'created_count' => count($createdUsers),
+                'errors' => $errors,
+                'pdf' => base64_encode($pdfContent), // Return PDF as base64
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal membuat users',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -222,7 +340,7 @@ class UserController extends \App\Http\Controllers\Controller
             'phone' => 'nullable|string',
             'department' => 'nullable|string',
             'position' => 'nullable|string',
-            'role' => 'sometimes|string|in:super-admin,admin,instructor,user',
+            'role' => 'sometimes|string|in:super-admin,admin,instructor,learner,user',
             'is_active' => 'sometimes|boolean',
             'password' => 'nullable|string|min:8',
             'reason' => 'nullable|string',
@@ -276,7 +394,7 @@ class UserController extends \App\Http\Controllers\Controller
         }
 
         $validated = $request->validate([
-            'role' => 'required|string|in:super-admin,admin,instructor,user',
+            'role' => 'required|string|in:super-admin,admin,instructor,learner,user',
             'reason' => 'required|string|max:500',
         ]);
 

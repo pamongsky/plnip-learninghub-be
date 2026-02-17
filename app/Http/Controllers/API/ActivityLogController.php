@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
 use App\Models\User;
@@ -59,12 +60,9 @@ class ActivityLogController extends Controller
             $perPage = $request->get('per_page', 50);
             $logs = $query->orderByDesc('created_at')->paginate($perPage);
 
-            return response()->json($logs);
+            return ApiResponse::paginated($logs);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to fetch activity logs',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::serverError('Gagal mengambil activity logs', $e->getMessage());
         }
     }
 
@@ -87,7 +85,7 @@ class ActivityLogController extends Controller
                 return $log->created_at->format('Y-m-d');
             });
 
-            return response()->json([
+            return ApiResponse::success([
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -98,10 +96,7 @@ class ActivityLogController extends Controller
                 'total' => $logs->count(),
             ]);
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to fetch user activity logs',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::serverError('Gagal mengambil activity logs user', $e->getMessage());
         }
     }
 
@@ -113,14 +108,9 @@ class ActivityLogController extends Controller
         try {
             // This would typically generate a CSV file
             // For now, return a message
-            return response()->json([
-                'message' => 'Export feature coming soon',
-            ]);
+            return ApiResponse::success(null, 'Fitur export akan segera hadir');
         } catch (\Exception $e) {
-            return response()->json([
-                'message' => 'Failed to export logs',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::serverError('Gagal export logs', $e->getMessage());
         }
     }
 }

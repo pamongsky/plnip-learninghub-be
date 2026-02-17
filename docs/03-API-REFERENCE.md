@@ -1622,7 +1622,7 @@ Mendapatkan context untuk AI (features, menu structure).
         "name": "Dashboard User",
         "description": "Ringkasan aktivitas belajar",
         "path": "/dashboard",
-        "roles": ["employee", "user"]
+        "roles": ["learner"]
       }
     ],
     "navigation_menu": {

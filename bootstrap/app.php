@@ -16,10 +16,19 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             // Role-based access for protected admin/instructor APIs.
             'role' => \App\Http\Middleware\RoleMiddleware::class,
+            // Database query logging (only active in debug mode)
+            'query.log' => \App\Http\Middleware\LogDatabaseQueries::class,
         ]);
 
         $middleware->api(prepend: [
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
+
+        // Add input sanitization, request logging, and compression for all API routes
+        $middleware->api(append: [
+            \App\Http\Middleware\SanitizeInput::class,
+            \App\Http\Middleware\LogRequests::class,
+            \App\Http\Middleware\CompressResponse::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [

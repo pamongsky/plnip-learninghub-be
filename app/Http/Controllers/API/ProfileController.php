@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Utils\FileValidator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -56,10 +57,7 @@ class ProfileController extends Controller
 
             $validator = Validator::make($request->all(), [
                 'name' => ['required', 'string', 'max:255'],
-                'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id],
                 'phone' => ['nullable', 'string', 'max:20'],
-                'department' => ['nullable', 'string', 'max:100'],
-                'position' => ['nullable', 'string', 'max:100'],
             ]);
 
             if ($validator->fails()) {
@@ -70,14 +68,26 @@ class ProfileController extends Controller
                 ], 422);
             }
 
-            $validated = $validator->validated();
+            $user->update([
+                'name' => $request->name,
+                'phone' => $request->phone,
+            ]);
 
-            // If email changed, reset email verification
-            if ($user->email !== $validated['email']) {
-                $validated['email_verified_at'] = null;
+            // Sync name to Moodle DB if user has moodle_user_id
+            if ($user->moodle_user_id) {
+                try {
+                    $nameParts = explode(' ', trim($request->name), 2);
+                    \Illuminate\Support\Facades\DB::connection('moodle')->table('user')
+                        ->where('id', $user->moodle_user_id)
+                        ->update([
+                            'firstname' => $nameParts[0],
+                            'lastname'  => $nameParts[1] ?? '-',
+                            'timemodified' => time(),
+                        ]);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::warning("Could not sync name to Moodle: " . $e->getMessage());
+                }
             }
-
-            $user->update($validated);
 
             return response()->json([
                 'success' => true,
@@ -109,15 +119,28 @@ class ProfileController extends Controller
     public function uploadAvatar(Request $request)
     {
         try {
+            // Basic validation
             $validator = Validator::make($request->all(), [
-                'avatar' => ['required', 'image', 'mimes:jpeg,png,jpg,gif', 'max:2048'], // Max 2MB
+                'avatar' => ['required', 'file'],
             ]);
 
             if ($validator->fails()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Validation failed',
+                    'message' => 'Avatar file is required',
                     'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Comprehensive file validation
+            $file = $request->file('avatar');
+            $validation = FileValidator::validate($file);
+
+            if (!$validation['valid']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'File validation failed',
+                    'errors' => $validation['errors']
                 ], 422);
             }
 
@@ -128,8 +151,13 @@ class ProfileController extends Controller
                 Storage::disk('public')->delete($user->avatar);
             }
 
-            // Store new avatar
-            $path = $request->file('avatar')->store('avatars', 'public');
+            // Sanitize filename and store
+            $originalName = $file->getClientOriginalName();
+            $sanitizedName = FileValidator::sanitizeFilename($originalName);
+            $extension = $file->getClientOriginalExtension();
+            $filename = pathinfo($sanitizedName, PATHINFO_FILENAME) . '_' . time() . '.' . $extension;
+
+            $path = $file->storeAs('avatars', $filename, 'public');
 
             $user->update(['avatar' => $path]);
 

@@ -6,17 +6,43 @@ use App\Http\Controllers\Controller;
 use App\Models\ClassMessage;
 use App\Events\NewClassMessage;
 use App\Events\QuestionAnswered;
+use App\Utils\FileValidator;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class ClassChatController extends Controller
 {
     /**
+     * Check if user is enrolled to the class
+     */
+    private function checkEnrollment(Request $request, int $classId): ?JsonResponse
+    {
+        $enrollment = \App\Models\CourseEnrollment::where('course_id', $classId)
+            ->where('user_id', $request->user()->id)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$enrollment) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Anda tidak terdaftar di kelas ini'
+            ], 403);
+        }
+
+        return null; // No error, user is enrolled
+    }
+
+    /**
      * Get messages for a class
      * By default loads ALL messages to preserve chat history
      */
     public function index(Request $request, int $classId): JsonResponse
     {
+        // Check enrollment first
+        if ($error = $this->checkEnrollment($request, $classId)) {
+            return $error;
+        }
+
         $perPage = $request->input('per_page', 0); // 0 = all messages (no pagination)
 
         $query = ClassMessage::forClass($classId)
@@ -55,13 +81,18 @@ class ClassChatController extends Controller
      */
     public function store(Request $request, int $classId): JsonResponse
     {
+        // Check enrollment first
+        if ($error = $this->checkEnrollment($request, $classId)) {
+            return $error;
+        }
+
         try {
             $validated = $request->validate([
                 'message' => 'nullable|string|max:2000',
                 'message_type' => 'in:discussion,question',
                 'reply_to' => 'nullable|exists:class_messages,id',
                 'mentioned_user_id' => 'nullable|exists:users,id',
-                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // Max 5MB
+                'image' => 'nullable|file',
             ]);
 
             // At least message or image must be present
@@ -70,6 +101,18 @@ class ClassChatController extends Controller
                     'success' => false,
                     'message' => 'Pesan atau gambar harus diisi',
                 ], 422);
+            }
+
+            // Validate file if uploaded
+            if ($request->hasFile('image')) {
+                $fileValidation = FileValidator::validate($request->file('image'));
+                if (!$fileValidation['valid']) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'File validation failed',
+                        'errors' => $fileValidation['errors']
+                    ], 422);
+                }
             }
 
             // Validate reply_to belongs to same class
@@ -85,7 +128,11 @@ class ClassChatController extends Controller
 
             $imagePath = null;
             if ($request->hasFile('image')) {
-                $imagePath = $request->file('image')->store('class-chat-images', 'public');
+                $file = $request->file('image');
+                $sanitizedName = FileValidator::sanitizeFilename($file->getClientOriginalName());
+                $extension = $file->getClientOriginalExtension();
+                $filename = pathinfo($sanitizedName, PATHINFO_FILENAME) . '_' . time() . '.' . $extension;
+                $imagePath = $file->storeAs('class-chat-images', $filename, 'public');
             }
 
             $message = ClassMessage::create([

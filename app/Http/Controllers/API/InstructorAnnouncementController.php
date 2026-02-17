@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
 use App\Events\AnnouncementCreated;
@@ -26,7 +27,7 @@ class InstructorAnnouncementController extends Controller
         // Get announcements visible to instructor:
         // - Global (from super-admin, visible to everyone)
         // - Unit where target_role = 'all' or 'instructor' (from admin)
-        // - NOT unit where target_role = 'user' (that's user-only)
+        // - NOT unit where target_role = 'learner' (that's learner-only)
         // - NOT class-targeted (those are for students, made by other instructors)
         $all = Announcement::with(['creator:id,name,department,position', 'creator.roles'])
             ->active()
@@ -57,12 +58,9 @@ class InstructorAnnouncementController extends Controller
                 return $ann;
             });
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'all' => $all,
-                'mine' => $mine,
-            ],
+        return ApiResponse::success([
+            'all' => $all,
+            'mine' => $mine,
         ]);
     }
 
@@ -95,7 +93,7 @@ class InstructorAnnouncementController extends Controller
                 'content' => $validated['content'],
                 'priority' => $validated['priority'],
                 'scope' => 'unit',
-                'target_role' => 'user', // Instructor always targets users (students)
+                'target_role' => 'learner', // Instructor always targets learners (students)
                 'target_classes' => $targetClasses,
                 'created_by' => auth()->id(),
                 'published_at' => $validated['published_at'] ?? now(),
@@ -106,17 +104,9 @@ class InstructorAnnouncementController extends Controller
             // Broadcast real-time event
             broadcast(new AnnouncementCreated($announcement))->toOthers();
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Pengumuman berhasil dibuat',
-                'data' => $announcement,
-            ], 201);
+            return ApiResponse::created($announcement, 'Pengumuman berhasil dibuat');
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal membuat pengumuman',
-                'error' => $e->getMessage(),
-            ], 500);
+            return ApiResponse::serverError('Gagal membuat pengumuman', $e->getMessage());
         }
     }
 
@@ -149,11 +139,7 @@ class InstructorAnnouncementController extends Controller
 
         $announcement->update($validated);
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Pengumuman berhasil diperbarui',
-            'data' => $announcement,
-        ]);
+        return ApiResponse::updated($announcement, 'Pengumuman berhasil diperbarui');
     }
 
     /**
@@ -166,9 +152,6 @@ class InstructorAnnouncementController extends Controller
 
         $announcement->delete();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Pengumuman berhasil dihapus',
-        ]);
+        return ApiResponse::deleted('Pengumuman berhasil dihapus');
     }
 }

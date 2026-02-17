@@ -22,10 +22,25 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+// Health check endpoints (public, no auth)
+Route::get('/health', [\App\Http\Controllers\API\HealthController::class, 'index']);
+Route::get('/health/moodle', [\App\Http\Controllers\API\HealthController::class, 'moodle']);
+
 // Public routes (no authentication required)
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/register', [AuthController::class, 'register']);
+// Rate limited to prevent brute force attacks
+Route::middleware(['throttle:10,1'])->group(function () {
+    Route::post('/login', [AuthController::class, 'login']); // 10 attempts per minute
+    Route::post('/register', [AuthController::class, 'register']);
+});
+
 Route::get('/landing-page', [LandingPageController::class, 'index']); // Public data
+
+// Forgot Password (OTP-based) - Strict rate limiting
+Route::middleware(['throttle:5,1'])->group(function () {
+    Route::post('/forgot-password/request-otp', [\App\Http\Controllers\API\ForgotPasswordController::class, 'requestOTP']); // 5 attempts per minute
+    Route::post('/forgot-password/verify-otp', [\App\Http\Controllers\API\ForgotPasswordController::class, 'verifyOTP']);
+    Route::post('/forgot-password/reset', [\App\Http\Controllers\API\ForgotPasswordController::class, 'resetPassword']);
+});
 
 // Protected routes (requires Sanctum authentication)
 Route::middleware('auth:sanctum')->group(function () {
@@ -36,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Authentication
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
+    Route::post('/auth/change-password-first-time', [AuthController::class, 'changePasswordFirstTime']);
 
     // =====================
     // AI ASSISTANT
@@ -61,7 +77,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Dashboard
     Route::get('/users', [\App\Http\Controllers\API\UserController::class, 'index']);
     Route::get('/users/all', [\App\Http\Controllers\API\UserController::class, 'getAllUsers']); // For admin view (read-only)
-    Route::get('/dashboard/employee', [DashboardController::class, 'employeeDashboard']);
+    Route::get('/dashboard/learner', [DashboardController::class, 'learnerDashboard']);
     Route::get('/dashboard/instructor', [DashboardController::class, 'instructorDashboard']);
     Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 
@@ -71,6 +87,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('superadmin/users')->middleware('role:super-admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\API\UserController::class, 'getAllUsers']);
         Route::post('/', [\App\Http\Controllers\API\UserController::class, 'store']);
+        Route::post('/bulk', [\App\Http\Controllers\API\UserController::class, 'storeBulk']);
         Route::get('/{user}', [\App\Http\Controllers\API\UserController::class, 'show']);
         Route::put('/{user}', [\App\Http\Controllers\API\UserController::class, 'update']);
         Route::delete('/{user}', [\App\Http\Controllers\API\UserController::class, 'destroy']);

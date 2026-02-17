@@ -70,8 +70,8 @@ class AIAssistantController extends Controller
                 'role' => 'user',
             ]);
 
-            // Get conversation history (last 10 messages)
-            $history = AiConversation::getHistory($conversationId, 10);
+            // Get conversation history (last 6 messages = 3 bolak-balik)
+            $history = AiConversation::getHistory($conversationId, 6);
 
             // Get user context
             $context = $this->buildUserContext($user);
@@ -208,39 +208,22 @@ class AIAssistantController extends Controller
         return [
             'public_pages' => [
                 [
-                    'name' => 'Landing Page',
-                    'path' => '/',
-                    'description' => 'Halaman utama PLN IP Learning Hub',
-                    'sections' => ['Hero banner', 'Fitur unggulan', 'Kelas populer', 'Statistik', 'Testimonial'],
-                ],
-                [
                     'name' => 'Login',
                     'path' => '/login',
-                    'description' => 'Halaman login untuk masuk ke sistem',
+                    'description' => 'Halaman login untuk masuk ke sistem PLN IP Learning Hub',
                     'how_to' => [
-                        'Buka halaman /login atau klik tombol "Masuk" di pojok kanan atas',
-                        'Masukkan email/NIP dan password',
+                        'Buka halaman /login atau klik tombol "Masuk" di landing page',
+                        'Masukkan email atau NIP dan password',
                         'Klik tombol "Masuk"',
-                        'Jika lupa password, klik "Lupa Password?"',
-                    ],
-                ],
-                [
-                    'name' => 'Register',
-                    'path' => '/register',
-                    'description' => 'Halaman pendaftaran akun baru',
-                    'how_to' => [
-                        'Buka halaman /register atau klik "Daftar" di landing page',
-                        'Isi form: Nama, Email, NIP, Password',
-                        'Klik "Daftar"',
-                        'Cek email untuk verifikasi (jika ada)',
+                        'Jika lupa password, klik "Lupa Password?" untuk reset via email',
                     ],
                 ],
             ],
             'auth_info' => [
-                'Sistem mendukung login dengan email/NIP',
-                'Password minimal 8 karakter',
-                'Ada fitur "Ingat Saya" untuk login otomatis',
-                'Session timeout setelah 2 jam tidak aktif',
+                'Akun dibuat oleh admin — tidak ada registrasi mandiri (akun dari sistem ERP PLN IP)',
+                'Login menggunakan email atau NIP beserta password',
+                'Jika belum punya akun, hubungi admin atau HR',
+                'Jika lupa password, gunakan fitur "Lupa Password?" di halaman login',
             ],
         ];
     }
@@ -338,25 +321,39 @@ class AIAssistantController extends Controller
     }
 
     /**
-     * Get ALL features across all roles so AI understands the entire platform
+     * Get features relevant to the user's role only
      */
     private function getAvailableFeatures(User $user): array
     {
+        $userRole = $user->role ?? 'learner';
+        $allFeatures = $this->buildAllFeatures();
+
+        return array_values(array_filter($allFeatures, function($feature) use ($userRole) {
+            $roles = $feature['roles'] ?? [];
+            return in_array('all', $roles) || in_array($userRole, $roles);
+        }));
+    }
+
+    /**
+     * Build complete features list for all roles
+     */
+    private function buildAllFeatures(): array
+    {
         $features = [];
 
-        // ===== USER/EMPLOYEE FEATURES =====
+        // ===== LEARNER FEATURES =====
         $features[] = [
             'name' => 'Dashboard User',
             'description' => 'Ringkasan aktivitas belajar: kelas aktif, progress, pengumuman terbaru, sertifikat',
             'path' => '/dashboard',
-            'roles' => ['employee', 'user'],
+            'roles' => ['learner'],
             'how_to' => ['Otomatis muncul setelah login sebagai user/employee'],
         ];
         $features[] = [
             'name' => 'Kelas Saya',
             'description' => 'Daftar kelas yang diikuti user. Bisa akses Moodle untuk belajar, lihat progress, lihat materi',
             'path' => '/dashboard/classes',
-            'roles' => ['employee', 'user'],
+            'roles' => ['learner'],
             'how_to' => [
                 'Klik menu "Kelas Saya" di sidebar',
                 'Klik salah satu kelas untuk melihat detail',
@@ -368,7 +365,7 @@ class AIAssistantController extends Controller
             'name' => 'Sertifikat',
             'description' => 'Lihat dan download sertifikat yang sudah diterbitkan setelah menyelesaikan kelas',
             'path' => '/dashboard/certificates',
-            'roles' => ['employee', 'user'],
+            'roles' => ['learner'],
             'how_to' => [
                 'Klik menu "Sertifikat" di sidebar',
                 'Sertifikat muncul setelah admin meng-upload sertifikat untuk kelas yang sudah selesai',
@@ -379,7 +376,7 @@ class AIAssistantController extends Controller
             'name' => 'Support Ticket (User)',
             'description' => 'Buat tiket bantuan untuk kendala teknis, pembelajaran, sertifikat, atau lainnya',
             'path' => '/dashboard/support',
-            'roles' => ['employee', 'user'],
+            'roles' => ['learner'],
             'how_to' => [
                 'Klik menu "Support Ticket" di sidebar',
                 'Klik tombol "Buat Tiket Baru"',
@@ -394,7 +391,7 @@ class AIAssistantController extends Controller
             'name' => 'Profil',
             'description' => 'Edit profil, upload avatar, ganti password',
             'path' => '/dashboard/profile',
-            'roles' => ['employee', 'user'],
+            'roles' => ['learner'],
             'how_to' => [
                 'Klik menu "Profil" atau klik avatar di sidebar bawah',
                 'Edit nama, email, department, posisi',
@@ -406,7 +403,7 @@ class AIAssistantController extends Controller
             'name' => 'Pengumuman',
             'description' => 'Baca pengumuman dari admin, super admin, atau instructor',
             'path' => '/dashboard',
-            'roles' => ['employee', 'user'],
+            'roles' => ['learner'],
         ];
         $features[] = [
             'name' => 'Chat / AI Assistant',
@@ -457,7 +454,7 @@ class AIAssistantController extends Controller
             'name' => 'Class Group Chat',
             'description' => 'Forum chat per kelas untuk diskusi antara instructor dan peserta',
             'path' => '/instructor/classes/[id] → tab Chat',
-            'roles' => ['instructor', 'employee'],
+            'roles' => ['instructor', 'learner'],
             'how_to' => [
                 'Buka detail kelas',
                 'Klik tab "Chat Kelas"',
@@ -606,12 +603,14 @@ class AIAssistantController extends Controller
     }
 
     /**
-     * Get navigation menu structure for ALL roles
+     * Get navigation menu for the user's role only
      */
     private function getNavigationMenu(User $user): array
     {
-        return [
-            'user_employee' => [
+        $userRole = $user->role ?? 'learner';
+
+        $menus = [
+            'learner' => [
                 'Dashboard' => '/dashboard',
                 'Kelas Saya' => '/dashboard/classes',
                 'Sertifikat' => '/dashboard/certificates',
@@ -632,7 +631,7 @@ class AIAssistantController extends Controller
                 'Support Ticket' => '/admin/support',
                 'Eskalasi' => '/admin/escalations',
             ],
-            'super_admin' => [
+            'super-admin' => [
                 'Dashboard' => '/superadmin',
                 'Kelola User' => '/superadmin/users',
                 'Role & Permission' => '/superadmin/roles',
@@ -645,6 +644,8 @@ class AIAssistantController extends Controller
                 'Activity Log' => '/superadmin/activity-log',
             ],
         ];
+
+        return $menus[$userRole] ?? $menus['learner'];
     }
 
     /**
@@ -654,7 +655,7 @@ class AIAssistantController extends Controller
     {
         $actions = [];
 
-        if ($user->hasRole(['employee']) || !$user->hasRole(['admin', 'super-admin', 'instructor'])) {
+        if ($user->hasRole(['learner']) || !$user->hasRole(['admin', 'super-admin', 'instructor'])) {
             $actions[] = ['label' => 'Buat Tiket Support', 'path' => '/dashboard/support'];
             $actions[] = ['label' => 'Lihat Kelas Saya', 'path' => '/dashboard/classes'];
             $actions[] = ['label' => 'Lihat Sertifikat', 'path' => '/dashboard/certificates'];
@@ -676,6 +677,70 @@ class AIAssistantController extends Controller
         }
 
         return $actions;
+    }
+
+    /**
+     * Detect if user is asking about how to navigate/use platform features
+     * Uses specific compound phrases to avoid false positives
+     * e.g. "cara kerja transformator" != "cara buka kelas"
+     */
+    private function isAskingAboutNavigation(string $message): bool
+    {
+        $msg = strtolower($message);
+
+        // Specific navigation phrases — must be specific enough to avoid false positives
+        $phrases = [
+            // "cara + action" patterns
+            'cara pakai', 'cara buka', 'cara akses', 'cara daftar', 'cara upload',
+            'cara download', 'cara kirim', 'cara lihat', 'cara ganti', 'cara edit',
+            'cara masuk', 'cara login', 'cara keluar', 'cara tambah', 'cara hapus',
+            'cara enroll', 'cara daftar kelas', 'cara buat tiket',
+            // "bagaimana cara" / "gimana cara"
+            'bagaimana cara', 'gimana cara', 'gmn cara', 'how to use', 'how do i',
+            // Location of UI elements
+            'dimana menu', 'dimana fitur', 'dimana tombol', 'dimana bisa',
+            'menu apa', 'menu mana', 'tombol mana', 'klik apa', 'klik mana',
+            'ada di menu', 'ada di mana', 'letaknya di', 'di halaman mana',
+            // Help/guide patterns
+            'langkah-langkah', 'step by step', 'langkah untuk',
+            'tolong ajarkan', 'arahkan saya', 'bantu saya untuk',
+            'tidak bisa buka', 'tidak bisa akses', 'tidak bisa login',
+            // Navigation keywords
+            'navigasi', 'tutorial platform', 'panduan penggunaan',
+        ];
+
+        foreach ($phrases as $phrase) {
+            if (str_contains($msg, $phrase)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Detect if user is asking about public pages (login, register, landing)
+     */
+    private function isAskingAboutPublicPages(string $message): bool
+    {
+        $msg = strtolower($message);
+
+        $phrases = [
+            'cara login', 'cara masuk', 'cara daftar', 'cara register',
+            'lupa password', 'forgot password', 'reset password', 'ganti password',
+            'buat akun', 'akun baru', 'belum punya akun', 'belum terdaftar',
+            'tidak bisa login', 'tidak bisa masuk', 'gagal login',
+            'landing page', 'halaman utama', 'halaman depan',
+            'registrasi akun', 'sign up', 'sign in',
+        ];
+
+        foreach ($phrases as $phrase) {
+            if (str_contains($msg, $phrase)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -706,16 +771,22 @@ class AIAssistantController extends Controller
         $systemPrompt .= "## KONTEKS PLATFORM\n";
         $systemPrompt .= "Anda juga memahami platform {$context['platform_name']} dan bisa membantu:\n";
         $systemPrompt .= "- Navigasi fitur dan menu\n";
-        $systemPrompt .= "- Cara login, register, akses kelas\n";
+        $systemPrompt .= "- Cara login dan akses kelas\n";
         $systemPrompt .= "- Memahami materi pembelajaran dari Moodle\n";
         $systemPrompt .= "- Menjelaskan konsep dari quiz/tugas (tanpa memberikan jawaban langsung)\n\n";
 
         $systemPrompt .= "User saat ini: {$context['user_role']}\n\n";
+
+        // Detect intent to decide what context to include
+        $needsNavigation = $this->isAskingAboutNavigation($userMessage);
+        $needsPublicPages = $this->isAskingAboutPublicPages($userMessage);
+
         $systemPrompt .= "## FITUR PLATFORM\n";
 
         foreach ($context['available_features'] as $feature) {
             $systemPrompt .= "- {$feature['name']}: {$feature['description']}\n";
-            if (isset($feature['how_to'])) {
+            // Only include how-to steps when user is asking about navigation/usage
+            if ($needsNavigation && isset($feature['how_to'])) {
                 $systemPrompt .= "  Cara pakai:\n";
                 foreach ($feature['how_to'] as $step) {
                     $systemPrompt .= "  * {$step}\n";
@@ -723,22 +794,19 @@ class AIAssistantController extends Controller
             }
         }
 
-        // Add user's enrolled courses
+        // Add user's enrolled courses (only names, no descriptions to save tokens)
         if (!empty($context['enrolled_courses'])) {
             $systemPrompt .= "\n## KELAS YANG DIIKUTI USER\n";
-            $systemPrompt .= "User terdaftar di kelas-kelas berikut:\n";
             foreach ($context['enrolled_courses'] as $course) {
-                $systemPrompt .= "- **{$course['name']}**: {$course['description']}\n";
+                $systemPrompt .= "- {$course['name']}\n";
             }
-            $systemPrompt .= "\nJika user bertanya tentang materi, cari dari kelas-kelas di atas.\n";
-            $systemPrompt .= "Jika tidak yakin kelas mana, tanyakan ke user.\n";
+            $systemPrompt .= "Jika ditanya tentang materi, cari dari kelas di atas.\n";
         }
 
         // Add course content if provided
         if ($courseContext && !isset($courseContext['error'])) {
             $systemPrompt .= "\n=== MATERI PEMBELAJARAN ===\n";
-            $systemPrompt .= "Kelas: {$courseContext['course_name']}\n";
-            $systemPrompt .= "Deskripsi: {$courseContext['description']}\n\n";
+            $systemPrompt .= "Kelas: {$courseContext['course_name']}\n\n";
 
             foreach ($courseContext['sections'] ?? [] as $section) {
                 $systemPrompt .= "## {$section['name']}\n";
@@ -748,27 +816,22 @@ class AIAssistantController extends Controller
 
                 foreach ($section['modules'] ?? [] as $module) {
                     $systemPrompt .= "### {$module['name']}\n";
-                    if (!empty($module['description'])) {
-                        $systemPrompt .= "{$module['description']}\n";
-                    }
                     if (!empty($module['content'])) {
-                        // Limit content to avoid token overflow
-                        $content = substr($module['content'], 0, 5000);
-                        $systemPrompt .= "Konten:\n{$content}\n\n";
+                        $content = substr($module['content'], 0, 4000);
+                        $systemPrompt .= "{$content}\n\n";
                     }
                 }
             }
 
-            $systemPrompt .= "Gunakan materi di atas untuk menjawab pertanyaan user tentang pembelajaran.\n";
+            $systemPrompt .= "Gunakan materi di atas untuk menjawab pertanyaan user.\n";
         }
 
-        // Add landing page info for navigation help
-        if (isset($context['landing_page_info'])) {
-            $systemPrompt .= "\n## HALAMAN PUBLIK (sebelum login)\n";
+        // Only add public pages info when user is asking about login/register/landing
+        if ($needsPublicPages && isset($context['landing_page_info'])) {
+            $systemPrompt .= "\n## HALAMAN PUBLIK\n";
             foreach ($context['landing_page_info']['public_pages'] ?? [] as $page) {
                 $systemPrompt .= "- {$page['name']} ({$page['path']}): {$page['description']}\n";
                 if (isset($page['how_to'])) {
-                    $systemPrompt .= "  Cara akses:\n";
                     foreach ($page['how_to'] as $step) {
                         $systemPrompt .= "  * {$step}\n";
                     }
@@ -777,7 +840,7 @@ class AIAssistantController extends Controller
         }
 
         $systemPrompt .= "\n## PANDUAN RESPONSE\n";
-        $systemPrompt .= "- Jawab SEMUA pertanyaan dengan lengkap dan akurat\n";
+        $systemPrompt .= "- Jawab SEMUA pertanyaan dengan LENGKAP dan TUNTAS — jangan berhenti di tengah\n";
         $systemPrompt .= "- Gunakan bahasa yang sama dengan user (Indonesia/English)\n";
         $systemPrompt .= "- Untuk pertanyaan umum: jawab seperti AI biasa\n";
         $systemPrompt .= "- Untuk pertanyaan platform: berikan panduan step-by-step\n";
@@ -785,6 +848,8 @@ class AIAssistantController extends Controller
         $systemPrompt .= "- Untuk quiz/tugas: jelaskan cara mengerjakan, JANGAN kasih jawaban langsung\n";
         $systemPrompt .= "- Gunakan format markdown untuk response yang rapi\n";
         $systemPrompt .= "- JANGAN bahas source code atau database internal\n";
+        $systemPrompt .= "- JANGAN pernah bilang 'saya tidak bisa mengakses materi' atau 'saya tidak memiliki akses ke kelas' — jika materi tidak ada di konteks, jawab berdasarkan pengetahuan umum Anda tentang topik tersebut\n";
+        $systemPrompt .= "- Jika ditanya tentang materi kelas tapi konteks kelas tidak tersedia, tetap bantu dengan pengetahuan umum dan sarankan user untuk membuka Moodle langsung\n";
 
         Log::info('Calling Gemini API...', ['prompt_length' => strlen($systemPrompt)]);
 
@@ -825,8 +890,7 @@ class AIAssistantController extends Controller
         ];
 
         // Call Gemini API
-        $response = Http::timeout(30)
-            ->withoutVerifying() // Disable SSL verification for development
+        $response = Http::timeout(90)
             ->withHeaders([
                 'Content-Type' => 'application/json',
             ])->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}", [
@@ -835,7 +899,7 @@ class AIAssistantController extends Controller
                 'temperature' => 0.7,
                 'topK' => 40,
                 'topP' => 0.95,
-                'maxOutputTokens' => 2048,
+                'maxOutputTokens' => 8192,
             ],
         ]);
 
@@ -1264,10 +1328,10 @@ class AIAssistantController extends Controller
             // Cleanup temp file
             @unlink($tempFile);
 
-            // Limit text length (Gemini has token limits ~32k)
-            $maxLength = 15000; // Safe limit
+            // Limit text length — 8000 chars cukup untuk memahami isi materi
+            $maxLength = 8000;
             if (strlen($text) > $maxLength) {
-                $text = substr($text, 0, $maxLength) . "\n\n[... teks dipotong karena terlalu panjang ...]";
+                $text = substr($text, 0, $maxLength) . "\n\n[... teks dipotong ...]";
             }
 
             Log::info('PDF extracted successfully', ['text_length' => strlen($text)]);

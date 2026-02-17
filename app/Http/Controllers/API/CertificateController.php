@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Certificate;
 use App\Models\Course;
 use App\Models\User;
+use App\Utils\FileValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -22,9 +23,29 @@ class CertificateController extends Controller
             ->where('is_valid', true)
             ->with(['course:id,title'])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($cert) {
+                return [
+                    'id' => $cert->id,
+                    'certificate_number' => $cert->certificate_number,
+                    'course_id' => $cert->course_id,
+                    'course' => $cert->course ? [
+                        'id' => $cert->course->id,
+                        'title' => $cert->course->title,
+                    ] : null,
+                    'pdf_path' => $cert->pdf_path,
+                    'pdf_url' => asset('storage/' . $cert->pdf_path),
+                    'original_filename' => $cert->original_filename,
+                    'is_valid' => $cert->is_valid,
+                    'notes' => $cert->notes,
+                    'created_at' => $cert->created_at,
+                ];
+            });
 
-        return response()->json($certificates);
+        return response()->json([
+            'success' => true,
+            'data' => $certificates
+        ]);
     }
 
     /**
@@ -52,15 +73,33 @@ class CertificateController extends Controller
     public function uploadForUser(Request $request, $courseId, $userId): JsonResponse
     {
         $request->validate([
-            'certificate' => 'required|file|mimes:pdf|max:20480',
+            'certificate' => 'required|file',
         ]);
+
+        // Validate file
+        $file = $request->file('certificate');
+        $fileValidation = FileValidator::validate($file);
+
+        if (!$fileValidation['valid']) {
+            return response()->json([
+                'message' => 'File validation failed',
+                'errors' => $fileValidation['errors']
+            ], 422);
+        }
+
+        // Ensure it's a PDF
+        if ($file->getMimeType() !== 'application/pdf') {
+            return response()->json([
+                'message' => 'File harus berupa PDF',
+            ], 422);
+        }
 
         $course = Course::findOrFail($courseId);
         $user = User::findOrFail($userId);
 
         $certNumber = 'CERT-' . strtoupper(substr(md5($user->id . $course->id . time()), 0, 8));
 
-        $file = $request->file('certificate');
+        $sanitizedFilename = FileValidator::sanitizeFilename($file->getClientOriginalName());
         $path = $file->storeAs(
             'certificates',
             "{$certNumber}.pdf",
@@ -72,7 +111,7 @@ class CertificateController extends Controller
             [
                 'certificate_number' => $certNumber,
                 'pdf_path' => $path,
-                'original_filename' => $file->getClientOriginalName(),
+                'original_filename' => $sanitizedFilename,
                 'is_valid' => true,
                 'notes' => null,
             ]
@@ -91,14 +130,23 @@ class CertificateController extends Controller
     public function uploadBulkZip(Request $request, $courseId): JsonResponse
     {
         $request->validate([
-            'zip' => 'required|file|mimes:zip|max:102400',
+            'zip' => 'required|file|max:102400', // 100MB max for bulk ZIP
         ]);
+
+        $zipFile = $request->file('zip');
+
+        // Validate MIME type (ZIP only)
+        $mime = $zipFile->getMimeType();
+        $allowedZipMimes = ['application/zip', 'application/x-zip-compressed', 'application/octet-stream'];
+        if (!in_array($mime, $allowedZipMimes) && strtolower($zipFile->getClientOriginalExtension()) !== 'zip') {
+            return response()->json(['message' => 'File harus berupa ZIP'], 422);
+        }
 
         $course = Course::findOrFail($courseId);
         $students = $course->students()->wherePivot('status', 'active')->get();
 
         $zip = new ZipArchive();
-        $zipPath = $request->file('zip')->getPathname();
+        $zipPath = $zipFile->getPathname();
 
         if ($zip->open($zipPath) !== true) {
             return response()->json(['message' => 'Gagal membuka file ZIP'], 422);
@@ -116,7 +164,9 @@ class CertificateController extends Controller
                 continue;
             }
 
-            $basename = pathinfo($filename, PATHINFO_FILENAME); // tanpa .pdf
+            // Validate filename
+            $sanitizedFilename = FileValidator::sanitizeFilename($filename);
+            $basename = pathinfo($sanitizedFilename, PATHINFO_FILENAME); // tanpa .pdf
 
             $user = $this->matchUser($basename, $students);
 
@@ -125,8 +175,21 @@ class CertificateController extends Controller
                 continue;
             }
 
-            // Extract and save PDF
+            // Extract and validate PDF content
             $contents = $zip->getFromIndex($i);
+
+            // Check if it's a valid PDF (magic bytes check)
+            if (!str_starts_with($contents, '%PDF-')) {
+                $unmatched[] = "{$filename} (bukan PDF valid)";
+                continue;
+            }
+
+            // Check file size (max 20MB)
+            if (strlen($contents) > 20 * 1024 * 1024) {
+                $unmatched[] = "{$filename} (terlalu besar)";
+                continue;
+            }
+
             $certNumber = 'CERT-' . strtoupper(substr(md5($user->id . $course->id . time() . $i), 0, 8));
             $savePath = "certificates/{$certNumber}.pdf";
 
@@ -137,13 +200,13 @@ class CertificateController extends Controller
                 [
                     'certificate_number' => $certNumber,
                     'pdf_path' => $savePath,
-                    'original_filename' => $filename,
+                    'original_filename' => $sanitizedFilename,
                     'is_valid' => true,
                     'notes' => null,
                 ]
             );
 
-            $matched[] = "{$filename} → {$user->name}";
+            $matched[] = "{$sanitizedFilename} → {$user->name}";
         }
 
         $zip->close();
@@ -203,26 +266,32 @@ class CertificateController extends Controller
      */
     protected function matchUser(string $basename, $students): ?User
     {
+        // Normalize: replace underscores/dashes with spaces for name matching
         $clean = trim($basename);
+        $cleanNormalized = strtolower(str_replace(['_', '-'], ' ', $clean));
 
-        // 1. NIP exact
+        // 1. NIP exact (keep original format)
         foreach ($students as $student) {
             if ($student->employee_id && strtolower($student->employee_id) === strtolower($clean)) {
                 return $student;
             }
         }
 
-        // 2. Nama exact
+        // 2. Nama exact (normalize underscores to spaces)
         foreach ($students as $student) {
-            if (strtolower($student->name) === strtolower($clean)) {
+            $studentName = strtolower($student->name);
+            if ($studentName === $cleanNormalized || $studentName === strtolower($clean)) {
                 return $student;
             }
         }
 
         // 3. Nama partial (filename contains name or name contains filename)
         foreach ($students as $student) {
-            if (str_contains(strtolower($student->name), strtolower($clean)) ||
-                str_contains(strtolower($clean), strtolower($student->name))) {
+            $studentName = strtolower($student->name);
+            if (str_contains($studentName, $cleanNormalized) ||
+                str_contains($cleanNormalized, $studentName) ||
+                str_contains($studentName, strtolower($clean)) ||
+                str_contains(strtolower($clean), $studentName)) {
                 return $student;
             }
         }

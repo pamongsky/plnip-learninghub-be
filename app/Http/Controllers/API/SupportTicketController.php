@@ -40,6 +40,19 @@ class SupportTicketController extends Controller
             $query->where('category', $request->category);
         }
 
+        // Filter by source (role of ticket creator)
+        if ($request->has('source') && $request->source !== 'all') {
+            $roleMap = [
+                'instructor' => 'instructor',
+                'learner' => 'learner',
+                'student' => 'learner', // alias
+            ];
+            $roleName = $roleMap[$request->source] ?? $request->source;
+            $query->whereHas('user.roles', function ($q) use ($roleName) {
+                $q->where('name', $roleName);
+            });
+        }
+
         // Search
         if ($request->has('search')) {
             $search = $request->search;

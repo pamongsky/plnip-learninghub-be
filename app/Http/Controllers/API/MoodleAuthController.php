@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers\API;
+use AppHelpersApiResponse;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditLog;
@@ -17,8 +18,8 @@ class MoodleAuthController extends Controller
 
     public function __construct()
     {
-        $this->moodleUrl = rtrim(env('MOODLE_URL'), '/');
-        $this->token = env('MOODLE_WS_TOKEN');
+        $this->moodleUrl = rtrim(config('services.moodle.url'), '/');
+        $this->token = config('services.moodle.token');
     }
 
     public function getLoginUrl(Request $request)
@@ -165,7 +166,7 @@ class MoodleAuthController extends Controller
             'super-admin' => 1,  // Manager (full system access)
             'admin' => 2,        // Course Creator (manage users + create courses, NOT manager)
             'instructor' => 3,   // Editing Teacher
-            'employee' => 5,     // Student
+            'learner' => 5,      // Student
         ];
 
         // Get Portal user's role

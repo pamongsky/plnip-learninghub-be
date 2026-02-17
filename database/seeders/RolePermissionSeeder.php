@@ -117,25 +117,11 @@ class RolePermissionSeeder extends Seeder
             ]);
         }
 
-        // Employee/User - view announcements, courses, messages
-        /** @var Role $userRole */
-        $userRole = Role::where('name', 'user')->first();
-        if ($userRole) {
-            $userRole->syncPermissions([
-                'announcements.view',
-                'courses.view',
-                'messages.view',
-                'messages.send',
-                'tickets.view',
-                'tickets.create',
-            ]);
-        }
-
-        // Employee role - same as user
-        /** @var Role $employeeRole */
-        $employeeRole = Role::where('name', 'employee')->first();
-        if ($employeeRole) {
-            $employeeRole->syncPermissions([
+        // Learner role (merged from employee + user) - view announcements, courses, messages
+        /** @var Role $learnerRole */
+        $learnerRole = Role::where('name', 'learner')->first();
+        if ($learnerRole) {
+            $learnerRole->syncPermissions([
                 'announcements.view',
                 'courses.view',
                 'messages.view',

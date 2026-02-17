@@ -1,8 +1,10 @@
 <?php
 
 namespace App\Http\Controllers\API;
+use AppHelpersApiResponse;
 
 use App\Http\Controllers\Controller;
+use App\Utils\FileValidator;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use App\Models\LandingPageSetting;
@@ -10,22 +12,35 @@ use App\Models\CmsHeroImage;
 use App\Models\CmsLeader;
 use App\Models\CmsPartner;
 use App\Models\CmsLoginBackground;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class LandingPageController extends Controller
 {
     /**
-     * Get all landing page data
+     * Clear landing page cache
+     */
+    protected function clearCache(): void
+    {
+        Cache::forget('landing_page_data');
+    }
+
+    /**
+     * Get all landing page data (cached for 1 hour)
      */
     public function index(): JsonResponse
     {
-        return response()->json([
-            'settings' => LandingPageSetting::all()->pluck('value', 'key'),
-            'hero_images' => CmsHeroImage::orderBy('order')->get(),
-            'login_backgrounds' => CmsLoginBackground::orderBy('order')->get(),
-            'leaders' => CmsLeader::orderBy('order')->get(),
-            'partners' => CmsPartner::all(),
-        ]);
+        $data = Cache::remember('landing_page_data', 3600, function () {
+            return [
+                'settings' => LandingPageSetting::all()->pluck('value', 'key'),
+                'hero_images' => CmsHeroImage::orderBy('order')->get(),
+                'login_backgrounds' => CmsLoginBackground::orderBy('order')->get(),
+                'leaders' => CmsLeader::orderBy('order')->get(),
+                'partners' => CmsPartner::all(),
+            ];
+        });
+
+        return response()->json($data);
     }
 
     /**
@@ -34,17 +49,34 @@ class LandingPageController extends Controller
     public function uploadFile(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => 'required|image|max:2048',
+            'file' => 'required|file',
             'key' => 'required|string',
         ]);
 
-        $path = $request->file('file')->store('cms/settings', 'public');
+        // Validate file
+        $file = $request->file('file');
+        $fileValidation = FileValidator::validate($file);
+
+        if (!$fileValidation['valid']) {
+            return response()->json([
+                'message' => 'File validation failed',
+                'errors' => $fileValidation['errors']
+            ], 422);
+        }
+
+        $sanitizedName = FileValidator::sanitizeFilename($file->getClientOriginalName());
+        $extension = $file->getClientOriginalExtension();
+        $filename = pathinfo($sanitizedName, PATHINFO_FILENAME) . '_' . time() . '.' . $extension;
+
+        $path = $file->storeAs('cms/settings', $filename, 'public');
         $url = '/storage/' . $path;
 
         LandingPageSetting::updateOrCreate(
             ['key' => $request->key],
             ['value' => $url]
         );
+
+        $this->clearCache();
 
         return response()->json(['url' => $url]);
     }
@@ -65,6 +97,8 @@ class LandingPageController extends Controller
             );
         }
 
+        $this->clearCache();
+
         return response()->json(['message' => 'Settings updated']);
     }
 
@@ -74,12 +108,27 @@ class LandingPageController extends Controller
     public function storeHeroImage(Request $request): JsonResponse
     {
         $request->validate([
-            'image' => 'required|image|max:2048',
+            'image' => 'required|file',
             'title' => 'nullable|string',
             'order' => 'integer',
         ]);
 
-        $path = $request->file('image')->store('cms/hero', 'public');
+        // Validate image file
+        $file = $request->file('image');
+        $fileValidation = FileValidator::validate($file);
+
+        if (!$fileValidation['valid']) {
+            return response()->json([
+                'message' => 'File validation failed',
+                'errors' => $fileValidation['errors']
+            ], 422);
+        }
+
+        $sanitizedName = FileValidator::sanitizeFilename($file->getClientOriginalName());
+        $extension = $file->getClientOriginalExtension();
+        $filename = pathinfo($sanitizedName, PATHINFO_FILENAME) . '_' . time() . '.' . $extension;
+
+        $path = $file->storeAs('cms/hero', $filename, 'public');
 
         $hero = CmsHeroImage::create([
             'image_path' => '/storage/' . $path,
@@ -92,10 +141,14 @@ class LandingPageController extends Controller
 
     public function deleteHeroImage(CmsHeroImage $heroImage): JsonResponse
     {
-        // Delete file from storage if needed
-        // Storage::disk('public')->delete(str_replace('/storage/', '', $heroImage->image_path));
+        // Delete file from storage
+        $filePath = str_replace('/storage/', '', $heroImage->image_path);
+        if ($filePath && Storage::disk('public')->exists($filePath)) {
+            Storage::disk('public')->delete($filePath);
+        }
 
         $heroImage->delete();
+        $this->clearCache();
         return response()->json(['message' => 'Deleted']);
     }
 
@@ -107,7 +160,7 @@ class LandingPageController extends Controller
         $request->validate([
             'name' => 'required|string',
             'title' => 'required|string',
-            'image' => 'nullable|image|max:2048',
+            'image' => 'nullable|file',
             'initial' => 'nullable|string',
             'order' => 'integer',
         ]);
@@ -115,7 +168,22 @@ class LandingPageController extends Controller
         $data = $request->only(['name', 'title', 'initial', 'order']);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('cms/leaders', 'public');
+            // Validate image file
+            $file = $request->file('image');
+            $fileValidation = FileValidator::validate($file);
+
+            if (!$fileValidation['valid']) {
+                return response()->json([
+                    'message' => 'File validation failed',
+                    'errors' => $fileValidation['errors']
+                ], 422);
+            }
+
+            $sanitizedName = FileValidator::sanitizeFilename($file->getClientOriginalName());
+            $extension = $file->getClientOriginalExtension();
+            $filename = pathinfo($sanitizedName, PATHINFO_FILENAME) . '_' . time() . '.' . $extension;
+
+            $path = $file->storeAs('cms/leaders', $filename, 'public');
             $data['image_path'] = '/storage/' . $path;
         }
 
@@ -129,13 +197,28 @@ class LandingPageController extends Controller
         $request->validate([
             'name' => 'required|string',
             'title' => 'required|string',
-            'image' => 'nullable|image|max:2048',
+            'image' => 'nullable|file',
         ]);
 
         $data = $request->only(['name', 'title', 'initial', 'order']);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('cms/leaders', 'public');
+            // Validate image file
+            $file = $request->file('image');
+            $fileValidation = FileValidator::validate($file);
+
+            if (!$fileValidation['valid']) {
+                return response()->json([
+                    'message' => 'File validation failed',
+                    'errors' => $fileValidation['errors']
+                ], 422);
+            }
+
+            $sanitizedName = FileValidator::sanitizeFilename($file->getClientOriginalName());
+            $extension = $file->getClientOriginalExtension();
+            $filename = pathinfo($sanitizedName, PATHINFO_FILENAME) . '_' . time() . '.' . $extension;
+
+            $path = $file->storeAs('cms/leaders', $filename, 'public');
             $data['image_path'] = '/storage/' . $path;
         }
 
@@ -157,10 +240,25 @@ class LandingPageController extends Controller
     {
         $request->validate([
             'name' => 'required|string',
-            'logo' => 'required|image|max:2048',
+            'logo' => 'required|file',
         ]);
 
-        $path = $request->file('logo')->store('cms/partners', 'public');
+        // Validate logo file
+        $file = $request->file('logo');
+        $fileValidation = FileValidator::validate($file);
+
+        if (!$fileValidation['valid']) {
+            return response()->json([
+                'message' => 'File validation failed',
+                'errors' => $fileValidation['errors']
+            ], 422);
+        }
+
+        $sanitizedName = FileValidator::sanitizeFilename($file->getClientOriginalName());
+        $extension = $file->getClientOriginalExtension();
+        $filename = pathinfo($sanitizedName, PATHINFO_FILENAME) . '_' . time() . '.' . $extension;
+
+        $path = $file->storeAs('cms/partners', $filename, 'public');
 
         $partner = CmsPartner::create([
             'name' => $request->name,
@@ -182,12 +280,27 @@ class LandingPageController extends Controller
     public function storeLoginBackground(Request $request): JsonResponse
     {
         $request->validate([
-            'image' => 'required|image|max:2048',
+            'image' => 'required|file',
             'title' => 'nullable|string',
             'order' => 'integer',
         ]);
 
-        $path = $request->file('image')->store('cms/login', 'public');
+        // Validate image file
+        $file = $request->file('image');
+        $fileValidation = FileValidator::validate($file);
+
+        if (!$fileValidation['valid']) {
+            return response()->json([
+                'message' => 'File validation failed',
+                'errors' => $fileValidation['errors']
+            ], 422);
+        }
+
+        $sanitizedName = FileValidator::sanitizeFilename($file->getClientOriginalName());
+        $extension = $file->getClientOriginalExtension();
+        $filename = pathinfo($sanitizedName, PATHINFO_FILENAME) . '_' . time() . '.' . $extension;
+
+        $path = $file->storeAs('cms/login', $filename, 'public');
 
         $background = CmsLoginBackground::create([
             'image_path' => '/storage/' . $path,

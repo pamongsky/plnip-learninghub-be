@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\AuditLog;
+use App\Utils\PasswordGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -61,9 +62,12 @@ class AuthController extends Controller
                     'department' => $user->department,
                     'position' => $user->position,
                     'avatar' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'is_active' => $user->is_active,
                     'roles' => $user->getRoleNames(),
+                    'created_at' => $user->created_at,
                 ],
                 'token' => $token,
+                'requires_password_change' => $user->must_change_password,
             ],
         ], 200);
     }
@@ -83,10 +87,13 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
             'phone' => $request->phone,
             'is_active' => true,
+            'must_change_password' => false, // Self-registered users don't need to change password
+            'password_changed_at' => now(),
+            'account_source' => 'manual',
         ]);
 
-        // Assign default employee role
-        $user->assignRole('employee');
+        // Assign default learner role
+        $user->assignRole('learner');
 
         $token = $user->createToken('api-token')->plainTextToken;
 
@@ -148,8 +155,58 @@ class AuthController extends Controller
                     'is_active' => $user->is_active,
                     'roles' => $user->getRoleNames(),
                     'permissions' => $user->getAllPermissions()->pluck('name'),
+                    'must_change_password' => $user->must_change_password,
+                    'created_at' => $user->created_at,
                 ],
             ],
+        ], 200);
+    }
+
+    public function changePasswordFirstTime(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = $request->user();
+
+        // Verify current password
+        if (!Hash::check($request->current_password, $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Current password is incorrect.'],
+            ]);
+        }
+
+        // Validate new password strength
+        $validation = PasswordGenerator::validate($request->new_password);
+        if (!$validation['valid']) {
+            throw ValidationException::withMessages([
+                'new_password' => $validation['errors'],
+            ]);
+        }
+
+        // Update password
+        $user->password = Hash::make($request->new_password);
+        $user->must_change_password = false;
+        $user->password_changed_at = now();
+        $user->save();
+
+        // Log password change activity
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'password_changed',
+            'entity_type' => 'User',
+            'entity_id' => $user->id,
+            'changes' => json_encode(['password' => 'changed']),
+            'reason' => 'First time password change',
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Password changed successfully. You can now access your dashboard.',
         ], 200);
     }
 }

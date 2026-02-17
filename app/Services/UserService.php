@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\AuditLog;
+use App\Utils\PasswordGenerator;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
@@ -62,20 +63,25 @@ class UserService
     }
 
     /**
-     * Create user manual (untuk dev phase)
+     * Create user manual with auto-generated password
+     *
+     * @return array ['user' => User, 'password' => string]
      */
-    public static function createUserManual(array $data, User $createdBy): User
+    public static function createUserManual(array $data, User $createdBy): array
     {
         $data['source'] = 'manual';
-        $data['password'] = Hash::make($data['password'] ?? 'TempPassword123!');
         $data['email_verified_at'] = now();
         $data['is_active'] = true;
+
+        // Auto-generate secure password
+        $plainPassword = PasswordGenerator::generate(12);
+        $hashedPassword = Hash::make($plainPassword);
 
         // Create user without using create() to avoid insertGetId issue
         $user = new User();
         $user->name = $data['name'];
         $user->email = $data['email'];
-        $user->password = $data['password'];
+        $user->password = $hashedPassword;
         $user->phone = $data['phone'] ?? null;
         $user->employee_id = $data['employee_id'] ?? null;
         $user->department = $data['department'] ?? null;
@@ -83,10 +89,12 @@ class UserService
         $user->source = $data['source'];
         $user->is_active = $data['is_active'];
         $user->email_verified_at = $data['email_verified_at'];
+        $user->must_change_password = true;
+        $user->account_source = 'manual';
         $user->save();
 
         // Assign role
-        $role = $data['role'] ?? 'user';
+        $role = $data['role'] ?? 'learner';
         $user->assignRole($role);
 
         // Log
@@ -100,10 +108,13 @@ class UserService
                 'email' => $user->email,
                 'role' => $role,
             ],
-            'User manual dibuat di dev phase'
+            'User manual created with auto-generated password'
         );
 
-        return $user;
+        return [
+            'user' => $user,
+            'password' => $plainPassword, // Return plain password for PDF generation
+        ];
     }
 
     /**
@@ -159,6 +170,28 @@ class UserService
             }
         } catch (\Exception $e) {
             \Log::warning("Could not update role_changed_at: " . $e->getMessage());
+        }
+
+        // Sync changed fields to Moodle DB if user has moodle_user_id
+        if ($user->moodle_user_id && (isset($data['name']) || isset($data['email']))) {
+            try {
+                $moodleUpdate = ['timemodified' => time()];
+                if (isset($data['name'])) {
+                    $nameParts = explode(' ', trim($user->name), 2);
+                    $moodleUpdate['firstname'] = $nameParts[0];
+                    $moodleUpdate['lastname']  = $nameParts[1] ?? '-';
+                }
+                if (isset($data['email'])) {
+                    $moodleUpdate['email'] = $user->email;
+                    $moodleUpdate['username'] = $user->email; // Moodle username = email
+                }
+                DB::connection('moodle')->table('user')
+                    ->where('id', $user->moodle_user_id)
+                    ->update($moodleUpdate);
+                \Log::info("Synced profile to Moodle for user {$user->id}");
+            } catch (\Exception $e) {
+                \Log::warning("Could not sync profile to Moodle for user {$user->id}: " . $e->getMessage());
+            }
         }
 
         // Log audit
