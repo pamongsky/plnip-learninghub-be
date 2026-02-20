@@ -72,8 +72,8 @@ class MoodleSyncService
 
             foreach ($moodleUsers as $mUser) {
                 try {
-                    // Check if user exists in Portal by email
-                    $portalUser = User::where('email', $mUser->email)->first();
+                    // Check if user exists in Portal by email (include soft deleted)
+                    $portalUser = User::withTrashed()->where('email', $mUser->email)->first();
 
                     if ($portalUser) {
                         // Update existing user
@@ -94,6 +94,12 @@ class MoodleSyncService
                                 'is_active' => true,
                             ]);
                             $this->log('debug', "Updated user from Moodle: {$mUser->email}");
+                        }
+
+                        if ($portalUser->trashed()) {
+                            // DO NOT RESTORE. Keep it deleted as per user request.
+                            // Just update data in background so audit log is fresh.
+                            $this->log('info', "Updated soft-deleted user (kept deleted): {$mUser->email}");
                         }
 
                         $updated++;
@@ -289,10 +295,10 @@ class MoodleSyncService
             foreach ($moodleEnrollments as $mEnroll) {
                 try {
                     // Find Portal user by email (Preferred) or moodle_user_id
-                    $portalUser = User::where('email', $mEnroll->email)->first();
+                    $portalUser = User::withTrashed()->where('email', $mEnroll->email)->first();
                     if (!$portalUser) {
                         // Try by moodle_id as fallback
-                        $portalUser = User::where('moodle_user_id', $mEnroll->moodle_user_id)->first();
+                        $portalUser = User::withTrashed()->where('moodle_user_id', $mEnroll->moodle_user_id)->first();
                     }
 
                     if (!$portalUser) {
@@ -310,6 +316,13 @@ class MoodleSyncService
                     // Generate Unique Key for checking
                     $key = "{$portalUser->id}-{$portalCourse->id}";
                     $seenEnrollmentKeys[] = $key;
+
+                    // RESTORE USER IF RE-ENROLLED:
+                    // If user is soft-deleted but found in active Moodle enrollment -> Restore them.
+                    if ($portalUser->trashed()) {
+                        $portalUser->restore();
+                        $this->log('info', "Restored soft-deleted user because of re-enrollment in course: {$portalCourse->code} ({$portalUser->email})");
+                    }
 
                     // Check if enrollment exists
                     $existingEnrollment = CourseEnrollment::where('user_id', $portalUser->id)
@@ -415,7 +428,7 @@ class MoodleSyncService
             // For each course, pick ONE instructor to display — skip admin/super-admin portal users
             $preferredByCourse = [];
             foreach ($teacherAssignments as $assignment) {
-                $portalUserCheck = User::where('email', $assignment->email)->first();
+                $portalUserCheck = User::withTrashed()->where('email', $assignment->email)->first();
                 // Admin/super-admin cannot be shown as course instructor
                 if ($portalUserCheck && $portalUserCheck->hasAnyRole(['super-admin', 'admin'])) {
                     continue;
@@ -430,7 +443,7 @@ class MoodleSyncService
             foreach ($preferredByCourse as $moodleCourseId => $assignment) {
                 try {
                     // Find portal user
-                    $portalUser = User::where('email', $assignment->email)->first();
+                    $portalUser = User::withTrashed()->where('email', $assignment->email)->first();
                     if (!$portalUser) continue;
 
                     // Find portal course
