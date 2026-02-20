@@ -14,7 +14,8 @@
       "Bash(python3:*)",
       "Bash(php:*)",
       "WebFetch(domain:ai.google.dev)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

@@ -7,7 +7,7 @@
 
 AI Assistant pada PLN IP Learning Hub adalah **asisten virtual berbasis Gemini AI** yang terintegrasi penuh dengan platform pembelajaran dan Moodle LMS. AI ini tidak hanya menjawab pertanyaan umum, tetapi juga:
 
-✅ **Memahami struktur platform** - Tahu semua fitur per role (admin, instructor, employee)
+✅ **Memahami struktur platform** - Tahu semua fitur per role (admin, instructor, learner)
 ✅ **Membaca materi pembelajaran dari Moodle** - PDF, HTML, assignments, books, lessons
 ✅ **Personalized learning assistant** - Tahu course apa yang user ikuti
 ✅ **Auto-detect context** - Otomatis fetch materi kalau user tanya topik pembelajaran
@@ -333,7 +333,7 @@ ENROLLED COURSES:
 
 AVAILABLE FEATURES (Total: 35 features):
 
-=== EMPLOYEE/USER FEATURES ===
+=== LEARNER FEATURES ===
 1. Dashboard User (/dashboard)
    - Ringkasan aktivitas belajar, kelas aktif, progress, sertifikat
 
@@ -534,7 +534,7 @@ POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:ge
 
 ### **Platform Features AI Understands** (35+ Features)
 
-#### **Employee/User Features (10 features):**
+#### **Learner Features (10 features):**
 1. Dashboard User - Overview aktivitas
 2. Kelas Saya - Enrolled courses
 3. Katalog Kursus - Browse & enroll
@@ -588,7 +588,7 @@ POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:ge
 AI tahu role user dan hanya suggest fitur yang relevan:
 
 **Example:**
-- Employee tanya "Gimana cara upload materi?" → AI jawab "Fitur upload materi hanya untuk Instructor. Sebagai employee, Anda bisa akses materi di 'Kelas Saya'"
+- Learner tanya "Gimana cara upload materi?" → AI jawab "Fitur upload materi hanya untuk Instructor. Sebagai learner, Anda bisa akses materi di 'Kelas Saya'"
 - Instructor tanya sama → AI kasih step-by-step upload via Moodle
 
 ### **2. Personalized Course Context**
@@ -899,7 +899,9 @@ AI Assistant PLN IP Learning Hub adalah **game-changer** untuk employee learning
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2026-02-11
+**Document Version:** 1.1
+**Last Updated:** 2026-02-19
 **Author:** System Architect
 **Status:** Production Ready ✅
+
+> **Role update:** Role "employee/user" telah diganti menjadi **"learner"** secara konsisten di seluruh sistem (Feb 2026).

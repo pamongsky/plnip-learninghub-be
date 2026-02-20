@@ -152,45 +152,80 @@ class DashboardController extends Controller
             ];
 
             // Get course progress from enrolled courses
-            $courseProgress = $user->courses()
-                ->get()
-                ->map(function ($course) use ($user) {
+            $enrolledCourses = $user->courses()->get();
+            $moodleCourseIds = $enrolledCourses->pluck('moodle_course_id')->filter()->toArray();
+            
+            // Batch load Moodle data
+            $moodleCompletions = [];
+            $moodleActivityCounts = [];
+            $moodleCompletedActivityCounts = [];
+
+            if ($user->moodle_user_id && !empty($moodleCourseIds)) {
+                try {
+                    $moodleConn = DB::connection('moodle');
+
+                    // 1. Get Course Completions (Batch)
+                    $completionsRaw = $moodleConn->table('course_completions')
+                        ->where('userid', $user->moodle_user_id)
+                        ->whereIn('course', $moodleCourseIds)
+                        ->get();
+                    
+                    foreach ($completionsRaw as $c) {
+                        if ($c->timecompleted) {
+                            $moodleCompletions[$c->course] = true;
+                        }
+                    }
+
+                    // 2. Get Total Activities per Course (Batch)
+                    // We only care about visible activities (visible=1)
+                    $activitiesRaw = $moodleConn->table('course_modules')
+                        ->whereIn('course', $moodleCourseIds)
+                        ->where('visible', 1)
+                        ->select('course', DB::raw('count(*) as total'))
+                        ->groupBy('course')
+                        ->get();
+
+                    foreach ($activitiesRaw as $a) {
+                        $moodleActivityCounts[$a->course] = $a->total;
+                    }
+
+                    // 3. Get Completed Activities per Course for User (Batch)
+                    // This requires a join because completion table keys by cmid, we need course grouping
+                    $completedActivitiesRaw = $moodleConn->table('course_modules_completion')
+                        ->join('course_modules as cm', 'course_modules_completion.coursemoduleid', '=', 'cm.id')
+                        ->where('course_modules_completion.userid', $user->moodle_user_id)
+                        ->whereIn('cm.course', $moodleCourseIds)
+                        ->where('course_modules_completion.completionstate', '>', 0)
+                        ->select('cm.course', DB::raw('count(*) as completed'))
+                        ->groupBy('cm.course')
+                        ->get();
+
+                    foreach ($completedActivitiesRaw as $ca) {
+                        $moodleCompletedActivityCounts[$ca->course] = $ca->completed;
+                    }
+
+                } catch (\Exception $e) {
+                    Log::warning("Batch Moodle Sync Error: " . $e->getMessage());
+                }
+            }
+
+            $courseProgress = $enrolledCourses->map(function ($course) use ($moodleCompletions, $moodleActivityCounts, $moodleCompletedActivityCounts) {
                     $enrollment = $course->pivot;
+                    $mId = $course->moodle_course_id;
 
-                    // Get completion percentage from Moodle if available
+                    // Calculate completion percentage
                     $completionPercentage = 0;
-                    if ($user->moodle_user_id && $course->moodle_course_id) {
-                        try {
-                            $completion = DB::connection('moodle')
-                                ->table('course_completions')
-                                ->where('userid', $user->moodle_user_id)
-                                ->where('course', $course->moodle_course_id)
-                                ->first();
-
-                            if ($completion && $completion->timecompleted) {
-                                $completionPercentage = 100;
-                            } else {
-                                // Calculate from completed activities
-                                $totalActivities = DB::connection('moodle')
-                                    ->table('course_modules')
-                                    ->where('course', $course->moodle_course_id)
-                                    ->where('visible', 1)
-                                    ->count();
-
-                                if ($totalActivities > 0) {
-                                    $completedActivities = DB::connection('moodle')
-                                        ->table('course_modules_completion')
-                                        ->join('course_modules as cm', 'course_modules_completion.coursemoduleid', '=', 'cm.id')
-                                        ->where('course_modules_completion.userid', $user->moodle_user_id)
-                                        ->where('cm.course', $course->moodle_course_id)
-                                        ->where('course_modules_completion.completionstate', '>', 0)
-                                        ->count();
-
-                                    $completionPercentage = round(($completedActivities / $totalActivities) * 100);
-                                }
+                    
+                    if ($mId) {
+                        if (isset($moodleCompletions[$mId])) {
+                            $completionPercentage = 100;
+                        } else {
+                            $total = $moodleActivityCounts[$mId] ?? 0;
+                            $completed = $moodleCompletedActivityCounts[$mId] ?? 0;
+                            
+                            if ($total > 0) {
+                                $completionPercentage = round(($completed / $total) * 100);
                             }
-                        } catch (\Exception $e) {
-                            \Log::warning("Error getting course completion: " . $e->getMessage());
                         }
                     }
 
@@ -295,188 +330,33 @@ class DashboardController extends Controller
 
     public function instructorDashboard(Request $request)
     {
-            try {
-                $user = $request->user();
-
-            // Get instructor's courses from Moodle
+        try {
+            $user = $request->user();
             $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
-            $moodleUser = null; // Initialize variable
-            $courses = collect([]); // Initialize courses
 
-            try {
-                // First, get user ID from Moodle
-                $moodleUser = DB::connection('moodle')
-                    ->table('user')
-                    ->where('email', $user->email)
-                    ->first();
+            // Step 1: Get courses from Moodle + portal fallback
+            [$courses, $moodleUser] = $this->getMoodleInstructorCourses($user);
 
-                \Log::info("Instructor Dashboard - Moodle User Check", [
-                    'email' => $user->email,
-                    'found' => $moodleUser ? true : false,
-                    'moodle_user_id' => $moodleUser ? $moodleUser->id : null
-                ]);
+            // Step 2: Batch map courses with participant counts & status
+            $mapCourses = $this->batchMapCoursesForInstructor($courses, $moodleBase);
 
-                if ($moodleUser) {
-                    // Get courses where user is a teacher/instructor
-                    // Check for editingteacher or teacher role assignments
-                    $courses = DB::connection('moodle')
-                        ->table('course as c')
-                        ->join('context as ctx', function($join) {
-                            $join->on('ctx.instanceid', '=', 'c.id')
-                                 ->where('ctx.contextlevel', '=', 50); // CONTEXT_COURSE = 50
-                        })
-                        ->join('role_assignments as ra', 'ra.contextid', '=', 'ctx.id')
-                        ->join('role as r', 'ra.roleid', '=', 'r.id')
-                        ->where('ra.userid', $moodleUser->id)
-                        ->whereIn('r.shortname', ['editingteacher', 'teacher']) // Teacher roles
-                        ->where('c.id', '!=', 1) // Exclude site home course
-                        ->select(
-                            'c.id',
-                            'c.fullname as title',
-                            'c.shortname',
-                            'c.startdate',
-                            'c.enddate',
-                            'c.visible'
-                        )
-                        ->where('c.visible', 1) // Only visible courses
-                        ->distinct()
-                        ->get();
-
-                    \Log::info("Instructor Dashboard - Courses Query Result", [
-                        'courses_count' => $courses->count(),
-                        'course_ids' => $courses->pluck('id')->toArray()
-                    ]);
-                }
-            } catch (\Exception $e) {
-                \Log::error('Moodle connection error: ' . $e->getMessage());
-                $courses = collect([]);
-            }
-
-            // Fallback: include portal courses where instructor_id = this user
-            // (in case Moodle query missed some due to visibility or missing moodle user)
-            $portalOnlyCourses = Course::where('instructor_id', $user->id)->get();
-            $moodleCourseIds = $courses->pluck('id')->toArray();
-
-            foreach ($portalOnlyCourses as $pc) {
-                // Only add if not already in Moodle result set
-                if (!in_array($pc->moodle_course_id, $moodleCourseIds)) {
-                    $now = now()->timestamp;
-                    $status = 'active';
-                    if ($pc->start_date && strtotime($pc->start_date) > $now) $status = 'upcoming';
-                    elseif ($pc->end_date && strtotime($pc->end_date) < $now) $status = 'completed';
-
-                    $courses->push((object)[
-                        'id' => $pc->moodle_course_id ?? $pc->id,
-                        'title' => $pc->title,
-                        'shortname' => $pc->short_name ?? $pc->title,
-                        'startdate' => $pc->start_date ? strtotime($pc->start_date) : 0,
-                        'enddate' => $pc->end_date ? strtotime($pc->end_date) : 0,
-                        'visible' => 1,
-                        '_portal_id' => $pc->id,
-                    ]);
-                    $moodleCourseIds[] = $pc->moodle_course_id ?? $pc->id;
-                }
-            }
-
-            // Map courses and calculate stats
-            $mapCourses = $courses->map(function ($course) use ($moodleBase) {
-                $now = now()->timestamp;
-                $status = 'active';
-
-                if ($course->startdate > $now) {
-                    $status = 'upcoming';
-                } elseif ($course->enddate > 0 && $course->enddate < $now) {
-                    $status = 'completed';
-                }
-
-                // Get participant count from Moodle
-                try {
-                    $participantCount = DB::connection('moodle')
-                        ->table('user_enrolments as ue')
-                        ->join('enrol as e', 'ue.enrolid', '=', 'e.id')
-                        ->where('e.courseid', $course->id)
-                        ->count();
-                } catch (\Exception $e) {
-                    $participantCount = 0;
-                }
-
-                // Find Portal course ID by Moodle course ID (or use pre-resolved _portal_id)
-                if (isset($course->_portal_id)) {
-                    $portalId = $course->_portal_id;
-                } else {
-                    $portalCourse = Course::where('moodle_course_id', $course->id)->first();
-                    $portalId = $portalCourse ? $portalCourse->id : $course->id;
-                }
-
-                return [
-                    'id' => $portalId, // Use Portal ID for routing
-                    'moodle_course_id' => $course->id, // Keep Moodle ID for reference
-                    'title' => $course->title,
-                    'short_name' => $course->shortname,
-                    'description' => '', // Removed to avoid CLOB issues with DISTINCT
-                    'participants' => $participantCount,
-                    'schedule' => $course->shortname,
-                    'status' => $status,
-                    'progress' => $status === 'completed' ? 100 : ($status === 'active' ? 50 : 0),
-                    'moodle_url' => "{$moodleBase}/course/view.php?id={$course->id}",
-                ];
-            });
-
-            // Calculate statistics
-            $activeClasses = $mapCourses->where('status', 'active')->count();
+            // Step 3: Calculate stats
+            $activeClasses    = $mapCourses->where('status', 'active')->count();
             $totalParticipants = $mapCourses->sum('participants');
             $completedClasses = $mapCourses->where('status', 'completed')->count();
+            $completedClasses = $mapCourses->where('status', 'completed')->count();
 
-            // Calculate average attendance from Moodle logs
-            $averageAttendance = 0;
-            if ($courses->isNotEmpty() && isset($moodleUser)) {
-                try {
-                    // Get attendance data from Moodle course completion
-                    $completionStats = DB::connection('moodle')
-                        ->table('course_completions as cc')
-                        ->join('enrol as e', 'cc.course', '=', 'e.courseid')
-                        ->join('user_enrolments as ue', function($join) use ($moodleUser) {
-                            $join->on('e.id', '=', 'ue.enrolid')
-                                 ->where('ue.userid', '=', $moodleUser->id);
-                        })
-                        ->whereNotNull('cc.timecompleted')
-                        ->count();
-
-                    $totalCourses = $courses->count();
-                    if ($totalCourses > 0) {
-                        $averageAttendance = round(($completionStats / $totalCourses) * 100);
-                    }
-
-                    // If no completion data, check user activity logs as alternative
-                    if ($averageAttendance === 0 && $totalCourses > 0) {
-                        $activityCount = DB::connection('moodle')
-                            ->table('logstore_standard_log')
-                            ->where('userid', $moodleUser->id)
-                            ->where('action', 'viewed')
-                            ->where('target', 'course')
-                            ->whereIn('courseid', $courses->pluck('id'))
-                            ->distinct('courseid')
-                            ->count('courseid');
-
-                        $averageAttendance = round(($activityCount / $totalCourses) * 100);
-                    }
-            } catch (\Exception $e) {
-                \Log::error('Error calculating attendance: ' . $e->getMessage());
-                $averageAttendance = 0;
-            }
-        }
-
-            // Today's announcements
+            // Step 4: Today's announcements
             $announcements = $this->getTodayAnnouncements($request, 'instructor');
 
             return ApiResponse::success([
                 'stats' => [
-                    'active_classes' => $activeClasses,
+                    'active_classes'     => $activeClasses,
                     'total_participants' => $totalParticipants,
-                    'completed_classes' => $completedClasses,
-                    'average_attendance' => $averageAttendance,
+                    'completed_classes'  => $completedClasses,
+
                 ],
-                'classes' => $mapCourses->values(),
+                'classes'       => $mapCourses->values(),
                 'announcements' => $announcements,
             ]);
         } catch (\Exception $e) {
@@ -486,6 +366,153 @@ class DashboardController extends Controller
             return ApiResponse::serverError('Gagal memuat dashboard instructor', $e->getMessage());
         }
     }
+
+    /**
+     * Fetch instructor's Moodle courses + portal fallback.
+     * Returns [$courses (Collection), $moodleUser (object|null)]
+     */
+    private function getMoodleInstructorCourses($user): array
+    {
+        $moodleUser = null;
+        $courses    = collect([]);
+
+        try {
+            $moodleUser = DB::connection('moodle')
+                ->table('user')
+                ->where('email', $user->email)
+                ->first();
+
+            Log::info('Instructor Dashboard - Moodle User Check', [
+                'email'          => $user->email,
+                'found'          => (bool) $moodleUser,
+                'moodle_user_id' => $moodleUser?->id,
+            ]);
+
+            if ($moodleUser) {
+                $courses = DB::connection('moodle')
+                    ->table('course as c')
+                    ->join('context as ctx', function ($join) {
+                        $join->on('ctx.instanceid', '=', 'c.id')
+                             ->where('ctx.contextlevel', '=', 50);
+                    })
+                    ->join('role_assignments as ra', 'ra.contextid', '=', 'ctx.id')
+                    ->join('role as r', 'ra.roleid', '=', 'r.id')
+                    ->where('ra.userid', $moodleUser->id)
+                    ->whereIn('r.shortname', ['editingteacher', 'teacher'])
+                    ->where('c.id', '!=', 1)
+                    ->where('c.visible', 1)
+                    ->select('c.id', 'c.fullname as title', 'c.shortname', 'c.startdate', 'c.enddate', 'c.visible')
+                    ->distinct()
+                    ->get();
+
+                Log::info('Instructor Dashboard - Courses Query Result', [
+                    'courses_count' => $courses->count(),
+                    'course_ids'    => $courses->pluck('id')->toArray(),
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Moodle connection error: ' . $e->getMessage());
+            $courses = collect([]);
+        }
+
+        // Portal fallback: courses where instructor_id = this user
+        $portalOnlyCourses = Course::where('instructor_id', $user->id)->get();
+        $moodleCourseIds   = $courses->pluck('id')->toArray();
+
+        foreach ($portalOnlyCourses as $pc) {
+            if (!in_array($pc->moodle_course_id, $moodleCourseIds)) {
+                $now    = now()->timestamp;
+                $status = 'active';
+                if ($pc->start_date && strtotime($pc->start_date) > $now) $status = 'upcoming';
+                elseif ($pc->end_date && strtotime($pc->end_date) < $now) $status = 'completed';
+
+                $courses->push((object) [
+                    'id'         => $pc->moodle_course_id ?? $pc->id,
+                    'title'      => $pc->title,
+                    'shortname'  => $pc->short_name ?? $pc->title,
+                    'startdate'  => $pc->start_date ? strtotime($pc->start_date) : 0,
+                    'enddate'    => $pc->end_date ? strtotime($pc->end_date) : 0,
+                    'visible'    => 1,
+                    '_portal_id' => $pc->id,
+                ]);
+                $moodleCourseIds[] = $pc->moodle_course_id ?? $pc->id;
+            }
+        }
+
+        return [$courses, $moodleUser];
+    }
+
+    /**
+     * Batch-map Moodle courses to dashboard format.
+     * Pre-fetches participant counts and portal IDs in bulk.
+     */
+    private function batchMapCoursesForInstructor($courses, string $moodleBase)
+    {
+        $allMoodleIds = $courses->pluck('id')->filter()->toArray();
+
+        // Guard: nothing to map if courses is empty
+        if (empty($allMoodleIds)) {
+            return collect([]);
+        }
+
+        // Batch: participant count per course
+        $participantCountMap = [];
+        try {
+            $participantCountMap = DB::connection('moodle')
+                ->table('user_enrolments as ue')
+                ->join('enrol as e', 'ue.enrolid', '=', 'e.id')
+                ->whereIn('e.courseid', $allMoodleIds)
+                ->select('e.courseid', DB::raw('count(*) as total'))
+                ->groupBy('e.courseid')
+                ->get()
+                ->keyBy('courseid')
+                ->map(fn ($r) => $r->total)
+                ->toArray();
+        } catch (\Exception $e) {
+            Log::warning('Batch participant count error: ' . $e->getMessage());
+        }
+
+        // Batch: portal course IDs
+        $portalCoursesMap = Course::whereIn('moodle_course_id', $allMoodleIds)
+            ->get(['id', 'moodle_course_id'])
+            ->keyBy('moodle_course_id')
+            ->map(fn ($c) => $c->id)
+            ->toArray();
+
+        $now = now()->timestamp;
+
+        return $courses->map(function ($course) use ($moodleBase, $participantCountMap, $portalCoursesMap, $now) {
+            $status = 'active';
+            if ($course->startdate > $now) {
+                $status = 'upcoming';
+            } elseif ($course->enddate > 0 && $course->enddate < $now) {
+                $status = 'completed';
+            }
+
+            $participantCount = $participantCountMap[$course->id] ?? 0;
+            $portalId = isset($course->_portal_id)
+                ? $course->_portal_id
+                : ($portalCoursesMap[$course->id] ?? $course->id);
+
+            return [
+                'id'              => $portalId,
+                'moodle_course_id' => $course->id,
+                'title'           => $course->title,
+                'short_name'      => $course->shortname,
+                'description'     => '',
+                'participants'    => $participantCount,
+                'schedule'        => $course->shortname,
+                'status'          => $status,
+                'progress'        => $status === 'completed' ? 100 : ($status === 'active' ? 50 : 0),
+                'moodle_url'      => "{$moodleBase}/course/view.php?id={$course->id}",
+            ];
+        });
+    }
+
+    /**
+     * Calculate average attendance percentage for an instructor.
+     */
+
 
     public function stats(Request $request)
     {

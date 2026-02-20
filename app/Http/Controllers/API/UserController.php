@@ -129,10 +129,17 @@ class UserController extends \App\Http\Controllers\Controller
             ];
         });
 
+        // Get unique departments for filter dropdown
+        $allDepartments = User::distinct()
+            ->whereNotNull('department')
+            ->orderBy('department')
+            ->pluck('department');
+
         return response()->json([
             'success' => true,
             'data' => $users,
             'total' => $users->count(),
+            'departments' => $allDepartments,
         ]);
     }
 
@@ -252,16 +259,25 @@ class UserController extends \App\Http\Controllers\Controller
             $createdUsers = [];
             $errors = [];
 
+            // PRE-FETCH: batch check existing emails and employee_ids before loop
+            $submittedEmails     = array_column($request->users, 'email');
+            $submittedEmpIds     = array_filter(array_column($request->users, 'employee_id'));
+
+            $existingEmails  = User::whereIn('email', $submittedEmails)->pluck('email')->flip()->toArray();
+            $existingEmpIds  = !empty($submittedEmpIds)
+                ? User::whereIn('employee_id', $submittedEmpIds)->pluck('employee_id')->flip()->toArray()
+                : [];
+
             foreach ($request->users as $index => $userData) {
                 try {
-                    // Check if email already exists
-                    if (User::where('email', $userData['email'])->exists()) {
+                    // Check if email already exists (in-memory, no DB call)
+                    if (isset($existingEmails[$userData['email']])) {
                         $errors[] = "Row " . ($index + 1) . ": Email {$userData['email']} already exists";
                         continue;
                     }
 
-                    // Check if employee_id already exists
-                    if (!empty($userData['employee_id']) && User::where('employee_id', $userData['employee_id'])->exists()) {
+                    // Check if employee_id already exists (in-memory, no DB call)
+                    if (!empty($userData['employee_id']) && isset($existingEmpIds[$userData['employee_id']])) {
                         $errors[] = "Row " . ($index + 1) . ": Employee ID {$userData['employee_id']} already exists";
                         continue;
                     }
@@ -269,6 +285,10 @@ class UserController extends \App\Http\Controllers\Controller
                     $result = UserService::createUserManual($userData, $request->user());
                     $user = $result['user'];
                     $plainPassword = $result['password'];
+
+                    // Track newly created emails/empids to prevent intra-batch dupes
+                    $existingEmails[$user->email] = true;
+                    if ($user->employee_id) $existingEmpIds[$user->employee_id] = true;
 
                     $createdUsers[] = [
                         'name' => $user->name,
@@ -526,6 +546,38 @@ class UserController extends \App\Http\Controllers\Controller
             return response()->json([
                 'message' => 'ERP sync failed',
                 'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Trigger manual ERP sync
+     */
+    public function syncWithERP(Request $request)
+    {
+        // Increase memory limit for sync process if needed
+        ini_set('memory_limit', '512M');
+        set_time_limit(300); // 5 minutes
+
+        try {
+            $service = new ERPSyncService();
+            $stats = $service->syncUsers();
+
+            if (isset($stats['error'])) {
+                return response()->json([
+                    'status' => 'error',
+                    'error' => $stats['error']
+                ], 400);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'stats' => $stats
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

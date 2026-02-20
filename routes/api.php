@@ -84,6 +84,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // =====================
     // USER MANAGEMENT (Super Admin)
     // =====================
+    // Generic Super Admin Routes
+    Route::middleware('role:super-admin')->group(function () {
+        Route::post('/superadmin/sync-erp', [\App\Http\Controllers\API\UserController::class, 'syncWithERP']);
+    });
+
     Route::prefix('superadmin/users')->middleware('role:super-admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\API\UserController::class, 'getAllUsers']);
         Route::post('/', [\App\Http\Controllers\API\UserController::class, 'store']);
@@ -96,10 +101,19 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // =====================
+    // SUPER ADMIN ANNOUNCEMENTS
+    // =====================
+    Route::prefix('superadmin/announcements')->middleware('role:super-admin')->group(function () {
+        Route::get('/', [AnnouncementController::class, 'superAdminIndex']);
+        Route::get('/tracking', [AnnouncementController::class, 'getAnnouncementTracking']);
+    });
+
+    // =====================
     // ACTIVITY LOG (Super Admin Only)
     // =====================
     Route::prefix('activity-log')->middleware('role:super-admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\API\ActivityLogController::class, 'index']);
+        Route::get('/stats', [\App\Http\Controllers\API\ActivityLogController::class, 'stats']);
         Route::get('/users/{user}', [\App\Http\Controllers\API\ActivityLogController::class, 'userLogs']);
     });
 
@@ -275,6 +289,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [\App\Http\Controllers\API\CourseController::class, 'index']);
         Route::post('/sync', [\App\Http\Controllers\API\CourseController::class, 'sync']);
         Route::get('/my', [\App\Http\Controllers\API\CourseController::class, 'myCourses']);
+        Route::get('/teaching', [\App\Http\Controllers\API\CourseController::class, 'teachingCourses']);
         // Tracking HARUS di atas /{id} agar tidak kena match sebagai ID
         Route::get('/enrollments/tracking', [\App\Http\Controllers\API\CourseController::class, 'getEnrollmentTracking']);
         // Specific routes dulu baru dynamic {id}
@@ -306,6 +321,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // MOODLE SSO ROUTE
     // =====================
     Route::post('/moodle/login-url', [\App\Http\Controllers\API\MoodleAuthController::class, 'getLoginUrl']);
+    Route::post('/moodle/credentials', [\App\Http\Controllers\API\MoodleAuthController::class, 'regenerateCredentials']);
 
     // =====================
     // MOODLE SYNC ROUTES (Super Admin & Admin)

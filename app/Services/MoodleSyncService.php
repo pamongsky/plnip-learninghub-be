@@ -76,14 +76,27 @@ class MoodleSyncService
                     $portalUser = User::where('email', $mUser->email)->first();
 
                     if ($portalUser) {
-                        // Update existing user — only sync moodle_user_id & is_active.
-                        // Do NOT overwrite name/email: portal is master data for user profiles.
-                        $portalUser->update([
-                            'moodle_user_id' => $mUser->id,
-                            'is_active' => true,
-                        ]);
+                        // Update existing user
+                        
+                        // PROTECT MANUAL/ERP DATA: Jangan overwrite nama/email jika user created di Portal/ERP
+                        if (in_array($portalUser->source, ['manual', 'erp'])) {
+                            $portalUser->update([
+                                'moodle_user_id' => $mUser->id,
+                                'is_active' => true,
+                            ]);
+                            $this->log('debug', "Linked Moodle ID for {$portalUser->source} user: {$mUser->email} (Name preserved)");
+                        } else {
+                            // Full Sync untuk user yang memang source-nya dari Moodle (atau null/legacy)
+                            $portalUser->update([
+                                'moodle_user_id' => $mUser->id,
+                                'name' => trim($mUser->firstname . ' ' . $mUser->lastname),
+                                'email' => $mUser->email, // Sync email if changed in Moodle
+                                'is_active' => true,
+                            ]);
+                            $this->log('debug', "Updated user from Moodle: {$mUser->email}");
+                        }
+
                         $updated++;
-                        $this->log('debug', "Updated user: {$mUser->email}");
                     } else {
                         // Create new user (assign default password, akan di-reset via email)
                         $userData = [
@@ -236,8 +249,20 @@ class MoodleSyncService
             $added = 0;
             $updated = 0;
             $errors = 0;
+            $suspended = 0;
 
-            // Get all active enrollments dari Moodle
+            // 1. Get all active enrollments from Portal (to track what should be kept)
+            // Format: 'user_id-course_id' => enrollment_id
+            $existingPortalEnrollments = CourseEnrollment::where('status', 'active')
+                ->get()
+                ->mapWithKeys(function ($item) {
+                    return ["{$item->user_id}-{$item->course_id}" => $item->id];
+                })
+                ->toArray();
+            
+            $seenEnrollmentKeys = [];
+
+            // 2. Get all active enrollments from Moodle
             // Join: user_enrolments -> enrol -> course -> user
             $moodleEnrollments = DB::connection('moodle')
                 ->table('user_enrolments as ue')
@@ -249,9 +274,9 @@ class MoodleSyncService
                 ->where('c.id', '!=', 1)
                 ->select(
                     'ue.id as enrolment_id',
-                    'u.id as user_id',
+                    'u.id as moodle_user_id',
                     'u.email',
-                    'c.id as course_id',
+                    'c.id as moodle_course_id',
                     'c.fullname as course_name',
                     'ue.timecreated',
                     'ue.timemodified',
@@ -263,19 +288,28 @@ class MoodleSyncService
 
             foreach ($moodleEnrollments as $mEnroll) {
                 try {
-                    // Find Portal user by email
+                    // Find Portal user by email (Preferred) or moodle_user_id
                     $portalUser = User::where('email', $mEnroll->email)->first();
+                    if (!$portalUser) {
+                        // Try by moodle_id as fallback
+                        $portalUser = User::where('moodle_user_id', $mEnroll->moodle_user_id)->first();
+                    }
+
                     if (!$portalUser) {
                         $this->log('warning', "User not found in Portal: {$mEnroll->email}");
                         continue;
                     }
 
                     // Find Portal course by moodle_course_id
-                    $portalCourse = Course::where('moodle_course_id', $mEnroll->course_id)->first();
+                    $portalCourse = Course::where('moodle_course_id', $mEnroll->moodle_course_id)->first();
                     if (!$portalCourse) {
-                        $this->log('warning', "Course not found in Portal: Moodle ID {$mEnroll->course_id}");
+                        $this->log('warning', "Course not found in Portal: Moodle ID {$mEnroll->moodle_course_id}");
                         continue;
                     }
+
+                    // Generate Unique Key for checking
+                    $key = "{$portalUser->id}-{$portalCourse->id}";
+                    $seenEnrollmentKeys[] = $key;
 
                     // Check if enrollment exists
                     $existingEnrollment = CourseEnrollment::where('user_id', $portalUser->id)
@@ -290,6 +324,8 @@ class MoodleSyncService
                     ];
 
                     if ($existingEnrollment) {
+                        // Only update if changes detected to save DB hits? 
+                        // For now just update to ensure consistency
                         $existingEnrollment->update($enrollmentData);
                         $updated++;
                     } else {
@@ -297,12 +333,27 @@ class MoodleSyncService
                         $added++;
                     }
 
-                    $this->log('debug', "Synced enrollment: {$mEnroll->email} -> {$mEnroll->course_name}");
-
                 } catch (\Exception $e) {
                     $errors++;
                     $this->log('error', "Failed to sync enrollment {$mEnroll->enrolment_id}: " . $e->getMessage());
                 }
+            }
+
+            // 3. Suspend Portal enrollments that are NOT in Moodle anymore
+            // If it was active locally, but not found in the Moodle list -> It's deleted/unenrolled in Moodle.
+            $keysToSuspend = array_diff(array_keys($existingPortalEnrollments), $seenEnrollmentKeys);
+
+            if (!empty($keysToSuspend)) {
+                $idsToSuspend = [];
+                foreach ($keysToSuspend as $key) {
+                    $idsToSuspend[] = $existingPortalEnrollments[$key];
+                }
+
+                CourseEnrollment::whereIn('id', $idsToSuspend)
+                    ->update(['status' => 'suspended']);
+                
+                $suspended = count($idsToSuspend);
+                $this->log('info', "Suspended {$suspended} enrollments that are missing in Moodle.");
             }
 
             DB::commit();
@@ -312,6 +363,7 @@ class MoodleSyncService
                 'total_moodle' => $moodleEnrollments->count(),
                 'added' => $added,
                 'updated' => $updated,
+                'suspended_local' => $suspended,
                 'errors' => $errors,
                 'duration_seconds' => $duration,
             ];
@@ -515,11 +567,12 @@ class MoodleSyncService
                 ->where('name', 'version')
                 ->first();
 
-            // Get counts
             $userCount = DB::connection('moodle')
                 ->table('user')
                 ->where('deleted', 0)
                 ->where('suspended', 0)
+                ->whereNotIn('id', [1, 2]) // Exclude guest and admin to match syncUsers
+                ->where('username', '!=', 'guest')
                 ->count();
 
             $courseCount = DB::connection('moodle')

@@ -64,7 +64,10 @@ class CertificateController extends Controller
         }
 
         $filename = $certificate->original_filename ?: "{$certificate->certificate_number}.pdf";
-        return Storage::disk('public')->download($certificate->pdf_path, $filename);
+        
+        /** @var \Illuminate\Filesystem\FilesystemAdapter $disk */
+        $disk = Storage::disk('public');
+        return $disk->download($certificate->pdf_path, $filename);
     }
 
     /**
@@ -266,32 +269,47 @@ class CertificateController extends Controller
      */
     protected function matchUser(string $basename, $students): ?User
     {
-        // Normalize: replace underscores/dashes with spaces for name matching
         $clean = trim($basename);
-        $cleanNormalized = strtolower(str_replace(['_', '-'], ' ', $clean));
+        // Normalize for name matching: replace commonly used separators with spaces
+        $cleanNormalized = strtolower(str_replace(['_', '-', '.'], ' ', $clean));
+        
+        // Split filename into parts to find NIP clearly
+        $parts = preg_split('/[\s\-_.]+/', strtolower($clean));
 
-        // 1. NIP exact (keep original format)
+        // 1. NIP Matching (Highest Priority)
         foreach ($students as $student) {
-            if ($student->employee_id && strtolower($student->employee_id) === strtolower($clean)) {
+            if (!$student->employee_id) continue;
+            
+            $nip = strtolower(trim($student->employee_id));
+            if (empty($nip)) continue;
+
+            // Check if NIP exists strictly as one of the parts (safe from partial number matches)
+            if (in_array($nip, $parts)) {
                 return $student;
             }
         }
 
-        // 2. Nama exact (normalize underscores to spaces)
+        // 2. Name Matching
         foreach ($students as $student) {
-            $studentName = strtolower($student->name);
-            if ($studentName === $cleanNormalized || $studentName === strtolower($clean)) {
+            $rawName = strtolower(trim($student->name));
+            // Clean up student name roughly similar to filename
+            $studentNameClean = str_replace(['.', '_', '-'], ' ', $rawName);
+            // Also keep a version with just single spaces
+            $studentNameClean = preg_replace('/\s+/', ' ', $studentNameClean);
+
+            // A. Exact match of normalized strings
+            if ($cleanNormalized === $studentNameClean) {
                 return $student;
             }
-        }
+            
+            // B. Filename CONTAINS the full name
+            // "fahmi admin user 240..." contains "fahmi admin user"
+            if (str_contains($cleanNormalized, $studentNameClean)) {
+                return $student;
+            }
 
-        // 3. Nama partial (filename contains name or name contains filename)
-        foreach ($students as $student) {
-            $studentName = strtolower($student->name);
-            if (str_contains($studentName, $cleanNormalized) ||
-                str_contains($cleanNormalized, $studentName) ||
-                str_contains($studentName, strtolower($clean)) ||
-                str_contains(strtolower($clean), $studentName)) {
+            // C. Name CONTAINS the filename (less likely but possible for short filenames)
+            if (str_contains($studentNameClean, $cleanNormalized)) {
                 return $student;
             }
         }

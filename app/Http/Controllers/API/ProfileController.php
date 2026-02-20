@@ -73,19 +73,30 @@ class ProfileController extends Controller
                 'phone' => $request->phone,
             ]);
 
-            // Sync name to Moodle DB if user has moodle_user_id
+            // Sync name & email to Moodle DB if user has moodle_user_id
             if ($user->moodle_user_id) {
                 try {
-                    $nameParts = explode(' ', trim($request->name), 2);
+                    $moodleUpdateData = [
+                        'timemodified' => time(),
+                    ];
+
+                    if ($request->name) {
+                        $nameParts = explode(' ', trim($request->name), 2);
+                        $moodleUpdateData['firstname'] = $nameParts[0];
+                        $moodleUpdateData['lastname'] = $nameParts[1] ?? '-';
+                    }
+
+                    if ($request->email && $request->email !== $user->email) {
+                        $moodleUpdateData['email'] = $request->email;
+                        $moodleUpdateData['username'] = $request->email; // Assuming username is email
+                    }
+
                     \Illuminate\Support\Facades\DB::connection('moodle')->table('user')
                         ->where('id', $user->moodle_user_id)
-                        ->update([
-                            'firstname' => $nameParts[0],
-                            'lastname'  => $nameParts[1] ?? '-',
-                            'timemodified' => time(),
-                        ]);
+                        ->update($moodleUpdateData);
+                        
                 } catch (\Exception $e) {
-                    \Illuminate\Support\Facades\Log::warning("Could not sync name to Moodle: " . $e->getMessage());
+                    \Illuminate\Support\Facades\Log::warning("Could not sync profile to Moodle: " . $e->getMessage());
                 }
             }
 

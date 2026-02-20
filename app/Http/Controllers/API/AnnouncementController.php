@@ -10,6 +10,74 @@ use Illuminate\Http\Request;
 
 class AnnouncementController extends Controller
 {
+    /**
+     * Get all announcements for Super Admin (management view)
+     * No scope filtering - see everything.
+     */
+    public function superAdminIndex(Request $request)
+    {
+        $perPage = $request->input('per_page', 15);
+        $priority = $request->input('priority');
+        $search = $request->input('search');
+
+        // Base query without scope restrictions
+        $query = Announcement::with(['creator:id,name,department,position', 'creator.roles']);
+
+        if ($priority && $priority !== 'all') {
+            $query->where('priority', $priority);
+        }
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('content', 'like', "%{$search}%");
+            });
+        }
+
+        // Sort: Priority then Created At (descending)
+        // Using created_at instead of published_at so admins see newest entries first
+        // Sort: Priority then Created At (descending)
+        // Using created_at instead of published_at so admins see newest entries first
+        $announcements = $query->orderByRaw("CASE priority 
+            WHEN 'penting' THEN 1 
+            WHEN 'umum' THEN 2 
+            WHEN 'informasi' THEN 3 
+            ELSE 4 END ASC")
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Transform data
+        $mappedAnnouncements = $announcements->map(function ($ann) {
+            return [
+                'id' => $ann->id,
+                'title' => $ann->title,
+                'content' => $ann->content,
+                'priority' => $ann->priority,
+                'scope' => $ann->scope,
+                'target_role' => $ann->target_role,
+                'target_classes' => $ann->target_classes,
+                'published_at' => $ann->published_at,
+                'expires_at' => $ann->expires_at,
+                'is_active' => $ann->is_active,
+                'views_count' => $ann->views_count ?? 0,
+                'created_at' => $ann->created_at,
+                'created_by' => $ann->created_by,
+                'created_by_id' => $ann->created_by,
+                'creator' => $ann->creator ? [
+                    'id' => $ann->creator->id,
+                    'name' => $ann->creator->name,
+                    'department' => $ann->creator->department,
+                    'position' => $ann->creator->position,
+                ] : null,
+                'creator_role' => $ann->creator?->roles->first()?->name ?? 'Unknown',
+                'status_label' => $this->getAnnouncementStatus($ann),
+                'status' => strtolower($this->getAnnouncementStatus($ann)),
+            ];
+        });
+
+        return ApiResponse::success($mappedAnnouncements);
+    }
+
     public function index(Request $request)
     {
         $perPage = $request->input('per_page', 15);
@@ -237,15 +305,14 @@ class AnnouncementController extends Controller
                 'created_at' => $ann->created_at,
                 'published_at' => $ann->published_at,
                 'is_active' => $ann->is_active,
+                'views' => $ann->views_count ?? 0,
+                'status' => strtolower($this->getAnnouncementStatus($ann)),
             ];
         });
 
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'announcements' => $mappedAnnouncements,
-            ],
-        ], 200);
+
+
+        return ApiResponse::success($mappedAnnouncements);
     }
 
     /**
@@ -269,7 +336,7 @@ class AnnouncementController extends Controller
                 'published_at' => $ann->published_at,
                 'views' => $ann->views_count ?? 0,
                 'is_active' => $ann->is_active,
-                'status' => $this->getAnnouncementStatus($ann),
+                'status' => strtolower($this->getAnnouncementStatus($ann)),
             ];
         });
 
@@ -283,7 +350,7 @@ class AnnouncementController extends Controller
     /**
      * Create global announcement (Super Admin Only)
      */
-    public function createGlobalAnnouncement(Request $request)
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -328,13 +395,22 @@ class AnnouncementController extends Controller
      */
     public function getAnnouncementTracking(Request $request)
     {
+        // Single query for all counts — replaces 5 separate queries
+        $counts = Announcement::selectRaw("
+            count(*) as total,
+            sum(case when is_active = 1 then 1 else 0 end) as active_total,
+            sum(case when priority = 'penting' then 1 else 0 end) as cnt_penting,
+            sum(case when priority = 'umum' then 1 else 0 end) as cnt_umum,
+            sum(case when priority = 'informasi' then 1 else 0 end) as cnt_informasi
+        ")->first();
+
         $stats = [
-            'total_announcements' => Announcement::count(),
-            'active_announcements' => Announcement::where('is_active', true)->count(),
+            'total_announcements' => (int) ($counts->total ?? 0),
+            'active_announcements' => (int) ($counts->active_total ?? 0),
             'by_priority' => [
-                'penting' => Announcement::where('priority', 'penting')->count(),
-                'umum' => Announcement::where('priority', 'umum')->count(),
-                'informasi' => Announcement::where('priority', 'informasi')->count(),
+                'penting'    => (int) ($counts->cnt_penting ?? 0),
+                'umum'       => (int) ($counts->cnt_umum ?? 0),
+                'informasi'  => (int) ($counts->cnt_informasi ?? 0),
             ],
             'by_creator_role' => Announcement::with('creator.roles')
                 ->get()

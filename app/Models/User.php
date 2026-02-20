@@ -31,6 +31,7 @@ class User extends Authenticatable
         'must_change_password',
         'password_changed_at',
         'account_source',
+        'moodle_creds_downloaded_at',
     ];
 
     protected $hidden = [
@@ -44,6 +45,7 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
+            'moodle_creds_downloaded_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
             'synced_at' => 'datetime',

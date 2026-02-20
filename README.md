@@ -15,7 +15,7 @@ PLN IP Learning Hub adalah platform pembelajaran digital yang dirancang khusus u
 
 ## Fitur Utama
 
-### Untuk Karyawan/Peserta
+### Untuk Learner (Karyawan)
 - Dashboard pembelajaran dengan progress tracking
 - Akses kelas dari Moodle LMS dengan SSO
 - Download sertifikat digital
@@ -24,9 +24,9 @@ PLN IP Learning Hub adalah platform pembelajaran digital yang dirancang khusus u
 - Direct messaging antar user
 
 ### Untuk Instructor
-- Manajemen kelas dan peserta
-- Upload sertifikat (individual/bulk)
-- Monitoring progress peserta
+- Manajemen kelas dan learner
+- Upload sertifikat (individual/bulk ZIP)
+- Monitoring progress learner
 - Class group chat
 - Pengumuman khusus kelas
 
@@ -49,7 +49,8 @@ PLN IP Learning Hub adalah platform pembelajaran digital yang dirancang khusus u
 ## Quick Links
 
 - [Arsitektur Sistem](docs/01-ARSITEKTUR-SISTEM.md) - Penjelasan lengkap arsitektur dan alur data
-- [Instalasi & Deployment](docs/02-INSTALASI-DEPLOYMENT.md) - Panduan setup development dan production
+- [Instalasi & Deployment (Ubuntu)](docs/02-INSTALASI-DEPLOYMENT.md) - Panduan setup development dan production (Ubuntu/Debian)
+- [Deployment RHEL](docs/DEPLOYMENT-RHEL.md) - **Panduan deployment lengkap ke server RHEL (Laravel + Next.js + Moodle)**
 - [API Reference](docs/03-API-REFERENCE.md) - Dokumentasi lengkap semua endpoint API
 - [Maintenance Guide](docs/04-MAINTENANCE.md) - Panduan troubleshooting dan maintenance
 
@@ -131,8 +132,8 @@ Instructor:
 Email: instructor@plnip.co.id
 Password: password
 
-User:
-Email: user@plnip.co.id
+Learner:
+Email: learner@plnip.co.id
 Password: password
 ```
 
@@ -278,7 +279,8 @@ npm run test
 
 ## Deployment
 
-Lihat panduan lengkap di [Instalasi & Deployment](docs/02-INSTALASI-DEPLOYMENT.md) untuk petunjuk deployment ke production.
+- **Server RHEL (PLN IP):** Lihat [docs/DEPLOYMENT-RHEL.md](docs/DEPLOYMENT-RHEL.md) — panduan lengkap deploy Laravel + Next.js + Moodle di RHEL dengan Oracle DB.
+- **Ubuntu/Debian:** Lihat [docs/02-INSTALASI-DEPLOYMENT.md](docs/02-INSTALASI-DEPLOYMENT.md) untuk setup development dan server Ubuntu.
 
 ## Support dan Dokumentasi
 

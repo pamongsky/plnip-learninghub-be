@@ -18,7 +18,7 @@ class UserService
     {
         $mapping = [
             'SUPERADMIN' => 'super-admin',
-            'ADMIN_UNIT' => 'admin',
+            'ADMIN' => 'admin',
             'INSTRUCTOR' => 'instructor',
             'USER' => 'user',
         ];

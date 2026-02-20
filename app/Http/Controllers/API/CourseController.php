@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Helpers\ApiResponse;
 use App\Http\Controllers\Controller;
+use App\Models\AuditLog;
 use App\Models\Course;
 use App\Models\CourseEnrollment;
 use App\Models\User;
@@ -68,8 +69,125 @@ class CourseController extends Controller
     }
 
     /**
-     * Sync courses from Moodle
+     * Get courses where current user is an instructor (Moodle Direct + Portal Fallback)
+     * Used for selectors like "Target Kelas" in Announcements.
      */
+    public function teachingCourses(Request $request)
+    {
+        try {
+            $user = $request->user();
+            $moodleBase = config('services.moodle.url', env('MOODLE_URL'));
+            
+            // 1. Fetch Moodle Courses where user is teacher
+            $moodleCourses = collect([]);
+            $moodleUser = null;
+
+            try {
+                $moodleUser = DB::connection('moodle')
+                    ->table('user')
+                    ->where('email', $user->email)
+                    ->first();
+
+                if ($moodleUser) {
+                    $moodleCourses = DB::connection('moodle')
+                        ->table('course as c')
+                        ->join('context as ctx', function ($join) {
+                            $join->on('ctx.instanceid', '=', 'c.id')
+                                 ->where('ctx.contextlevel', '=', 50);
+                        })
+                        ->join('role_assignments as ra', 'ra.contextid', '=', 'ctx.id')
+                        ->join('role as r', 'ra.roleid', '=', 'r.id')
+                        ->where('ra.userid', $moodleUser->id)
+                        ->whereIn('r.shortname', ['editingteacher', 'teacher'])
+                        ->where('c.id', '!=', 1)
+                        ->where('c.visible', 1)
+                        ->select('c.id', 'c.fullname', 'c.shortname')
+                        ->distinct()
+                        ->get();
+                }
+            } catch (\Exception $e) {
+                // Ignore Moodle connection errors, proceed with Portal only
+            }
+
+            // 2. Portal Fallback (instructor_id)
+            $portalOnlyCourses = Course::where('instructor_id', $user->id)->get();
+            $allCoursesVec = collect([]);
+            $moodleIdsFound = [];
+
+            // Add Moodle courses first
+            foreach ($moodleCourses as $mc) {
+                $allCoursesVec->push((object)[
+                    'moodle_id' => $mc->id,
+                    'title' => $mc->fullname,
+                    'short_name' => $mc->shortname,
+                    'is_portal' => false
+                ]);
+                $moodleIdsFound[] = $mc->id;
+            }
+
+            // Add Portal courses if not already found via Moodle
+            foreach ($portalOnlyCourses as $pc) {
+                if ($pc->moodle_course_id && in_array($pc->moodle_course_id, $moodleIdsFound)) {
+                    continue; // Already added
+                }
+                $allCoursesVec->push((object)[
+                    'moodle_id' => $pc->moodle_course_id,
+                    'portal_id' => $pc->id, // Explicit portal ID
+                    'title' => $pc->title,
+                    'short_name' => $pc->short_name,
+                    'is_portal' => true
+                ]);
+            }
+
+            // 3. Map to Portal IDs and Get Participant Counts
+            // We need to return Portal IDs for the announcement target mechanism to work
+            $moodleIdsToMap = $allCoursesVec->pluck('moodle_id')->filter()->toArray();
+            
+            // Map Moodle IDs -> Portal IDs
+            $portalIdMap = Course::whereIn('moodle_course_id', $moodleIdsToMap)
+                ->pluck('id', 'moodle_course_id')
+                ->toArray();
+
+            // Get Participant Counts (from Moodle for accuracy)
+            $participantCounts = [];
+            if (!empty($moodleIdsToMap)) {
+                try {
+                    $participantCounts = DB::connection('moodle')
+                        ->table('user_enrolments as ue')
+                        ->join('enrol as e', 'ue.enrolid', '=', 'e.id')
+                        ->whereIn('e.courseid', $moodleIdsToMap)
+                        ->select('e.courseid', DB::raw('count(*) as total'))
+                        ->groupBy('e.courseid')
+                        ->pluck('total', 'courseid')
+                        ->toArray();
+                } catch (\Exception $e) {}
+            }
+
+            // Final Transform
+            $results = $allCoursesVec->map(function($c) use ($portalIdMap, $participantCounts) {
+                // Determine valid Portal ID or fallback to Moodle ID if sync missing
+                // Ideally we sync on fly but that's heavy.
+                // If we don't have a portal ID, this announcement might fail to target users if logic relies on portal ID.
+                // But mostly it implies the course isn't synced yet.
+                
+                $finalId = $c->is_portal ? ($c->portal_id ?? $c->moodle_id) : ($portalIdMap[$c->moodle_id] ?? $c->moodle_id);
+                
+                return [
+                    'id' => $finalId, 
+                    'title' => $c->title,
+                    'short_name' => $c->short_name,
+                    'participants_count' => $participantCounts[$c->moodle_id] ?? 0,
+                ];
+            });
+
+            return ApiResponse::success($results);
+
+        } catch (\Exception $e) {
+             Log::error('Teaching Courses Error: ' . $e->getMessage());
+             return ApiResponse::serverError('Gagal memuat data kelas ajar', $e->getMessage());
+        }
+    }
+
     /**
      * Sync courses from Moodle (Direct DB Strategy)
      */
@@ -135,59 +253,121 @@ class CourseController extends Controller
         if ($course->moodle_course_id && $course->enrollments) {
             try {
                 $moodleConn = DB::connection('moodle');
+                $moodleCourseId = $course->moodle_course_id;
 
+                // =============================================
+                // BATCH QUERY #1: Find all Moodle users at once
+                // =============================================
+                $enrolledEmails = $course->enrollments->map(fn($e) => $e->user?->email)->filter()->unique()->values()->toArray();
+
+                // Guard: skip Moodle queries if there are no enrolled users
+                if (empty($enrolledEmails)) {
+                    return response()->json($course);
+                }
+
+                $moodleUsersMap = $moodleConn->table('user')
+                    ->whereIn('email', $enrolledEmails)
+                    ->get(['id', 'email'])
+                    ->keyBy('email'); // email => moodle_user_obj
+
+                $moodleUserIds = $moodleUsersMap->pluck('id')->toArray();
+
+                // Guard: skip batch queries if no Moodle users matched
+                if (empty($moodleUserIds)) {
+                    return response()->json($course);
+                }
+
+                // =============================================
+                // BATCH QUERY #2: Get completions for all users
+                // =============================================
+                $completionsMap = $moodleConn->table('course_completions')
+                    ->where('course', $moodleCourseId)
+                    ->whereIn('userid', $moodleUserIds)
+                    ->get(['userid', 'timecompleted'])
+                    ->keyBy('userid'); // moodle_userid => completion_obj
+
+                // =============================================
+                // BATCH QUERY #3: Total activities in this course (single query)
+                // =============================================
+                $totalActivities = $moodleConn->table('course_modules as cm')
+                    ->join('modules as m', 'cm.module', '=', 'm.id')
+                    ->where('cm.course', $moodleCourseId)
+                    ->where('cm.visible', 1)
+                    ->where('cm.completion', '>', 0)
+                    ->count();
+
+                // =============================================
+                // BATCH QUERY #4: Completed activities per user
+                // =============================================
+                $completedActivitiesMap = $moodleConn->table('course_modules_completion')
+                    ->join('course_modules as cm', 'course_modules_completion.coursemoduleid', '=', 'cm.id')
+                    ->where('cm.course', $moodleCourseId)
+                    ->whereIn('course_modules_completion.userid', $moodleUserIds)
+                    ->where('course_modules_completion.completionstate', '>', 0)
+                    ->select('course_modules_completion.userid', DB::raw('count(*) as completed'))
+                    ->groupBy('course_modules_completion.userid')
+                    ->get()
+                    ->keyBy('userid'); // moodle_userid => {completed: N}
+
+                // =============================================
+                // BATCH QUERY #5: Last activity per user
+                // =============================================
+                $lastActivityMap = $moodleConn->table('logstore_standard_log')
+                    ->where('courseid', $moodleCourseId)
+                    ->whereIn('userid', $moodleUserIds)
+                    ->select('userid', DB::raw('MAX(timecreated) as last_seen'))
+                    ->groupBy('userid')
+                    ->get()
+                    ->keyBy('userid'); // moodle_userid => {last_seen: timestamp}
+
+                // =============================================
+                // BATCH QUERY #6: Course Grade (Fallback)
+                // =============================================
+                $courseTotalItem = $moodleConn->table('grade_items')
+                    ->where('courseid', $moodleCourseId)
+                    ->where('itemtype', 'course')
+                    ->first();
+
+                $gradesMap = collect();
+                if ($courseTotalItem) {
+                    $gradesMap = $moodleConn->table('grade_grades')
+                        ->where('itemid', $courseTotalItem->id)
+                        ->whereIn('userid', $moodleUserIds)
+                        ->get(['userid', 'finalgrade', 'rawgrade'])
+                        ->keyBy('userid');
+                }
+
+                // =============================================
+                // NOW loop — all data already in memory, no more DB calls
+                // =============================================
                 foreach ($course->enrollments as $enrollment) {
-                    $user = $enrollment->user;
-
-                    // Get Moodle user
-                    $moodleUser = $moodleConn->table('user')
-                        ->where('email', $user->email)
-                        ->first();
+                    $userEmail = $enrollment->user?->email;
+                    $moodleUser = $moodleUsersMap[$userEmail] ?? null;
 
                     if ($moodleUser) {
-                        // Get course completion progress
-                        $completion = $moodleConn->table('course_completions')
-                            ->where('userid', $moodleUser->id)
-                            ->where('course', $course->moodle_course_id)
-                            ->first();
+                        $mUserId = $moodleUser->id;
+                        $completion = $completionsMap[$mUserId] ?? null;
 
                         if ($completion && $completion->timecompleted) {
                             $enrollment->progress = 100;
+                        } elseif ($totalActivities > 0) {
+                            $completed = (int) ($completedActivitiesMap[$mUserId]?->completed ?? 0);
+                            $enrollment->progress = round(($completed / $totalActivities) * 100);
                         } else {
-                            // Calculate progress from completed activities
-                            $totalActivities = $moodleConn->table('course_modules as cm')
-                                ->join('modules as m', 'cm.module', '=', 'm.id')
-                                ->where('cm.course', $course->moodle_course_id)
-                                ->where('cm.visible', 1)
-                                ->where('cm.completion', '>', 0)
-                                ->count();
-
-                            if ($totalActivities > 0) {
-                                $completedActivities = $moodleConn->table('course_modules_completion')
-                                    ->join('course_modules as cm', 'course_modules_completion.coursemoduleid', '=', 'cm.id')
-                                    ->where('cm.course', $course->moodle_course_id)
-                                    ->where('course_modules_completion.userid', $moodleUser->id)
-                                    ->where('course_modules_completion.completionstate', '>', 0)
-                                    ->count();
-
-                                $enrollment->progress = round(($completedActivities / $totalActivities) * 100);
+                            // Fallback to Grade if no completion tracking
+                            $grade = $gradesMap[$mUserId] ?? null;
+                            if ($grade && $grade->finalgrade !== null && $courseTotalItem) {
+                                $maxGrade = $courseTotalItem->grademax ?: 100;
+                                $enrollment->progress = round(($grade->finalgrade / $maxGrade) * 100);
                             } else {
                                 $enrollment->progress = 0;
                             }
                         }
 
-                        // Get last activity
-                        $lastActivity = $moodleConn->table('logstore_standard_log')
-                            ->where('userid', $moodleUser->id)
-                            ->where('courseid', $course->moodle_course_id)
-                            ->orderBy('timecreated', 'desc')
-                            ->first();
-
-                        if ($lastActivity) {
-                            $enrollment->last_activity_at = date('Y-m-d H:i:s', $lastActivity->timecreated);
-                        } else {
-                            $enrollment->last_activity_at = null;
-                        }
+                        $lastActivity = $lastActivityMap[$mUserId] ?? null;
+                        $enrollment->last_activity_at = $lastActivity
+                            ? date('Y-m-d H:i:s', $lastActivity->last_seen)
+                            : null;
                     } else {
                         $enrollment->progress = 0;
                         $enrollment->last_activity_at = null;
@@ -198,6 +378,7 @@ class CourseController extends Controller
                 // Continue without enrichment
             }
         }
+
 
         return response()->json($course);
     }
@@ -221,6 +402,17 @@ class CourseController extends Controller
         // Note: For now we only update local DB.
         // Moodle update logic can be added later if needed.
         $course->update($validated);
+
+        AuditLog::create([
+            'user_id'     => $request->user()->id,
+            'action'      => 'course_updated',
+            'entity_type' => 'Course',
+            'entity_id'   => $course->id,
+            'changes'     => json_encode($validated),
+            'reason'      => 'Course details updated',
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
+        ]);
 
         return response()->json([
             'message' => 'Kelas berhasil diperbarui',
@@ -442,6 +634,17 @@ class CourseController extends Controller
 
             DB::commit();
 
+            AuditLog::create([
+                'user_id'     => $currentUser->id,
+                'action'      => 'course_enrolled',
+                'entity_type' => 'CourseEnrollment',
+                'entity_id'   => $enrollment->id,
+                'changes'     => json_encode(['course_id' => $course->id, 'user_id' => $user->id, 'role_id' => $roleId ?? null]),
+                'reason'      => 'Admin enrolled user to course',
+                'ip_address'  => $request->ip(),
+                'user_agent'  => $request->userAgent(),
+            ]);
+
             return response()->json([
                 'message' => 'User berhasil didaftarkan (Sync Moodle Direct DB)',
                 'data' => $enrollment
@@ -521,7 +724,7 @@ class CourseController extends Controller
                         ->delete();
                 }
 
-                // Suspend user enrollment in Moodle (status=1 means suspended)
+                // Delete user enrollment in Moodle (Hard Delete)
                 $moodleConn->table('user_enrolments')
                     ->where('userid', $user->moodle_user_id)
                     ->whereIn('enrolid', function ($query) use ($course) {
@@ -529,7 +732,7 @@ class CourseController extends Controller
                             ->from('enrol')
                             ->where('courseid', $course->moodle_course_id);
                     })
-                    ->update(['status' => 1, 'timemodified' => time()]);
+                    ->delete();
 
             } catch (\Exception $e) {
                 Log::warning("Failed to sync unenroll to Moodle for user {$userId}: " . $e->getMessage());
@@ -538,6 +741,17 @@ class CourseController extends Controller
 
         // Delete enrollment from portal
         $enrollment->delete();
+
+        AuditLog::create([
+            'user_id'     => $currentUser->id,
+            'action'      => 'course_unenrolled',
+            'entity_type' => 'CourseEnrollment',
+            'entity_id'   => $id,
+            'changes'     => json_encode(['course_id' => $id, 'user_id' => $userId]),
+            'reason'      => 'Admin unenrolled user from course',
+            'ip_address'  => $request->ip(),
+            'user_agent'  => $request->userAgent(),
+        ]);
 
         return response()->json(['message' => 'User berhasil diunenroll dari kelas']);
     }
@@ -569,34 +783,49 @@ class CourseController extends Controller
 
             $oldRoleId = $enrollment->moodle_role_id;
 
+
             // Update Moodle role_assignments if course has Moodle integration
             if ($course->moodle_course_id && $user->moodle_user_id) {
-                $moodleConn = DB::connection('moodle');
+                try {
+                    $moodleConn = DB::connection('moodle');
 
-                $context = $moodleConn->table('context')
-                    ->where('contextlevel', 50)
-                    ->where('instanceid', $course->moodle_course_id)
-                    ->first();
+                    $context = $moodleConn->table('context')
+                        ->where('contextlevel', 50)
+                        ->where('instanceid', $course->moodle_course_id)
+                        ->first();
 
-                if ($context) {
-                    // Remove old role assignment
-                    $moodleConn->table('role_assignments')
-                        ->where('contextid', $context->id)
-                        ->where('userid', $user->moodle_user_id)
-                        ->where('roleid', $oldRoleId)
-                        ->delete();
+                    if ($context) {
+                        // Remove OLD role assignment only if we know what it was
+                        if ($oldRoleId !== null) {
+                            $moodleConn->table('role_assignments')
+                                ->where('contextid', $context->id)
+                                ->where('userid', $user->moodle_user_id)
+                                ->where('roleid', $oldRoleId)
+                                ->delete();
+                        } else {
+                            // No previous role tracked — remove ALL roles for clean state
+                            $moodleConn->table('role_assignments')
+                                ->where('contextid', $context->id)
+                                ->where('userid', $user->moodle_user_id)
+                                ->delete();
+                        }
 
-                    // Insert new role assignment
-                    $moodleConn->table('role_assignments')->insert([
-                        'roleid' => $newRoleId,
-                        'contextid' => $context->id,
-                        'userid' => $user->moodle_user_id,
-                        'timemodified' => now()->timestamp,
-                        'modifierid' => 2, // admin
-                        'component' => ' ', // Oracle: empty string = NULL, use space instead
-                        'itemid' => 0,
-                        'sortorder' => 0,
-                    ]);
+                        // Insert new role assignment
+                        $moodleConn->table('role_assignments')->insert([
+                            'roleid'       => $newRoleId,
+                            'contextid'    => $context->id,
+                            'userid'       => $user->moodle_user_id,
+                            'timemodified' => now()->timestamp,
+                            'modifierid'   => 2,
+                            'component'    => ' ',
+                            'itemid'       => 0,
+                            'sortorder'    => 0,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Log error but ALLOW local update to proceed
+                    Log::error("Moodle role sync failed for user {$userId}: " . $e->getMessage());
+                    // Optional: return warning message in response
                 }
             }
 
@@ -609,6 +838,23 @@ class CourseController extends Controller
             }
 
             $roleNames = [1 => 'Manager', 2 => 'Course Creator', 3 => 'Editing Teacher', 4 => 'Non-Editing Teacher', 5 => 'Student'];
+
+            AuditLog::create([
+                'user_id'     => $currentUser->id,
+                'action'      => 'enrollment_role_changed',
+                'entity_type' => 'CourseEnrollment',
+                'entity_id'   => $enrollment->id,
+                'changes'     => json_encode([
+                    'course_id'   => $id,
+                    'user_id'     => $userId,
+                    'old_role_id' => $oldRoleId,
+                    'new_role_id' => $newRoleId,
+                    'new_role'    => $roleNames[$newRoleId],
+                ]),
+                'reason'      => 'Admin changed enrollment role',
+                'ip_address'  => $request->ip(),
+                'user_agent'  => $request->userAgent(),
+            ]);
 
             return response()->json([
                 'message' => "Role berhasil diubah ke {$roleNames[$newRoleId]}",
@@ -632,7 +878,7 @@ class CourseController extends Controller
         $user = User::findOrFail($userId);
 
         // SECURITY: Check if user is enrolled to this course
-        $enrollment = \App\Models\CourseEnrollment::where('course_id', $courseId)
+        $enrollment = CourseEnrollment::where('course_id', $courseId)
             ->where('user_id', $userId)
             ->where('status', 'active')
             ->first();
