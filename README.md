@@ -1,10 +1,10 @@
-# PLN IP Learning Hub Portal
+# Learning Management System
 
-Portal pembelajaran terintegrasi untuk PLN Indonesia Power dengan sistem manajemen pembelajaran (LMS) berbasis Moodle, sinkronisasi data ERP, dan AI Assistant bertenaga Gemini.
+Portal pembelajaran terintegra dengan sistem manajemen pembelajaran (LMS) berbasis Moodle, sinkronisasi data ERP, dan AI Assistant bertenaga Gemini.
 
 ## Tentang Sistem
 
-PLN IP Learning Hub adalah platform pembelajaran digital yang dirancang khusus untuk mendukung program pelatihan dan pengembangan karyawan PLN Indonesia Power. Sistem ini mengintegrasikan:
+LMS adalah platform pembelajaran digital yang dirancang khusus untuk mendukung program pelatihan dan pengembangan karyawan. Sistem ini mengintegrasikan:
 
 - **Backend REST API** - Laravel 12 dengan Oracle Database
 - **Frontend Modern** - Next.js 14 dengan App Router
@@ -117,26 +117,6 @@ npm run dev
 - **Backend API**: http://localhost:8000
 - **API Documentation**: http://localhost:8000/api/documentation
 
-### Default Credentials (Setelah Seeding)
-
-```
-Super Admin:
-Email: superadmin@plnip.co.id
-Password: password
-
-Admin:
-Email: admin@plnip.co.id
-Password: password
-
-Instructor:
-Email: instructor@plnip.co.id
-Password: password
-
-Learner:
-Email: learner@plnip.co.id
-Password: password
-```
-
 ## Tech Stack
 
 ### Backend
@@ -187,53 +167,6 @@ plnip-portal-frontend/           # Frontend Next.js
 └── public/                      # Static assets
 ```
 
-## Environment Variables Penting
-
-### Backend (.env)
-```env
-# Database
-DB_CONNECTION=oracle
-DB_HOST=your-oracle-host
-DB_PORT=1521
-DB_DATABASE=your-database
-DB_SERVICE_NAME=your-service-name
-DB_USERNAME=your-username
-DB_PASSWORD=your-password
-
-# Moodle Database
-MOODLE_DB_HOST=moodle-oracle-host
-MOODLE_DB_DATABASE=moodle-db
-MOODLE_DB_USERNAME=moodle-user
-MOODLE_DB_PASSWORD=moodle-password
-
-# Moodle Web Services
-MOODLE_URL=https://moodle.plnip.co.id
-MOODLE_WS_TOKEN=your-moodle-token
-
-# ERP Integration
-ERP_ENABLED=false
-ERP_API_URL=https://erp.plnip.co.id/api/employees
-ERP_API_KEY=your-erp-api-key
-
-# Gemini AI
-GEMINI_API_KEY=your-gemini-api-key
-
-# Laravel Reverb
-REVERB_APP_ID=your-app-id
-REVERB_APP_KEY=your-app-key
-REVERB_APP_SECRET=your-app-secret
-REVERB_HOST=your-reverb-host
-REVERB_PORT=443
-REVERB_SCHEME=https
-```
-
-### Frontend (.env.local)
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_WS_HOST=localhost
-NEXT_PUBLIC_WS_PORT=8080
-NEXT_PUBLIC_WS_KEY=your-app-key
-```
 
 ## Development Workflow
 
@@ -294,7 +227,3 @@ Untuk informasi lengkap, lihat dokumentasi di folder `docs/`:
 ## Lisensi
 
 Proprietary - PLN Indonesia Power © 2026
-
-## Kontak
-
-Untuk pertanyaan teknis atau dukungan, hubungi tim development PLN IP Learning Hub.
